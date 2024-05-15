@@ -774,22 +774,6 @@ IF /I !MODLOADER!==NEOFORGE SET MODLOADER=NEOFORGE
 IF /I !MODLOADER!==VANILLA SET MODLOADER=VANILLA
 IF /I !MODLOADER! NEQ FORGE IF /I !MODLOADER! NEQ FABRIC IF /I !MODLOADER! NEQ NEOFORGE IF /I !MODLOADER! NEQ QUILT IF /I !MODLOADER! NEQ VANILLA GOTO :reentermodloader
 
-
-:: Detects if settings are trying to use some weird old Minecraft Forge version that isn't supported.
-:: This is done again later after the settings-universalator.txt is present and this is section is skipped.
-IF /I !MODLOADER!==FORGE IF !MCMAJOR! LSS 10 IF !MINECRAFT! NEQ 1.6.4 IF !MINECRAFT! NEQ 1.7.10 IF !MINECRAFT! NEQ 1.8.9 IF !MINECRAFT! NEQ 1.9.4 (
-  CLS
-  ECHO: & ECHO: & ECHO: & ECHO:
-  ECHO    %yellow% SORRY - YOUR ENTERED MINECRAFT VERSION - FORGE FOR MINECRAFT !MINECRAFT! - IS NOT SUPPORTED. %blue%
-  ECHO:
-  ECHO    %yellow% FIND A MODPACK WITH A MORE POPULARLY USED VERSION. %blue%
-  ECHO    OR
-  ECHO    PRESS ANY KEY TO START OVER AND ENTER NEW VERSION NUMBERS
-  ECHO:
-  PAUSE
-  GOTO :startover
-)
-
 :: At this point, since a modloader type is entered and the script will be getting the maven metadata file next, see if DNS can find the maven repository IP.
 IF /I !MODLOADER!==FORGE SET "MAVENURL=maven.minecraftforge.net"
 IF /I !MODLOADER!==FABRIC SET "MAVENURL=maven.fabricmc.net"
