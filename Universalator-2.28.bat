@@ -661,6 +661,7 @@ IF /I !MAINMENU!==A GOTO :allcommands
 IF /I !MAINMENU!==ZIP GOTO :zipit
 IF /I !MAINMENU!==PORT GOTO :portedit
 IF /I !MAINMENU!==PROPS GOTO :editserverprops
+IF /I !MAINMENU!==FIREWALL GOTO :firewallcheck
 
 :: If no recognized entries were made then go back to main menu
 
@@ -683,6 +684,7 @@ ECHO:
 ECHO:    %green% SCAN %blue%     = SCAN MOD FILES FOR CLIENT ONLY MODS
 ECHO:    %green% PORT %blue%     = CHANGE THE PORT NUMBER USED
 ECHO:    %green% PROPS %blue%    = CHANGE SERVER PROPERTIES
+ECHO:    %green% FIREWALL %blue%     = CHECK FOR A VALID FIREWALL RULE SETTING FOR JAVA
 ECHO:    %green% UPNP %blue%     = UPNP PORT FORWARDING MENU
 ECHO:    %green% MCREATOR %blue% = SCAN MOD FILES FOR MCREATOR MADE MODS
 ECHO:    %green% OVERRIDE %blue% = USE CURRENTLY SET SYSTEM JAVA PATH INSTEAD OF ADOPTIUM JAVA
@@ -784,7 +786,6 @@ IF /I !MODLOADER!==NEOFORGE SET "MAVENURL=maven.neoforged.net"
 :: because cloudflare blocks using the websites with direct IPs and they could not be used later on.
 IF !MODLOADER! NEQ VANILLA FOR /F %%A IN ('powershell -Command "Resolve-DnsName -Name !MAVENURL!; $?"') DO SET DIDMODLOADERRESOLVE=%%A
 IF !DIDMODLOADERRESOLVE!==False SET DNSFAIL=Y & SET DNSFAILMODLOADER=Y
-
 
 :: If these tests have already passed before in this script session, then bypass checking vanilla DNS again to speed things up.
 IF DEFINED DNSANDPINGPASSEDBEFORE GOTO :skipvanilladnstest
@@ -1017,24 +1018,19 @@ PAUSE
 GOTO :startover
 
 :skipmavenoopsforge
+SET MAVENISSUE=IDK
 :: If Forge get newest version available of the selected minecraft version.
 IF /I !MODLOADER!==FORGE (
   SET /a idx=0
   SET "ARRAY[!idx!]="
   FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-forge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
-    IF %%A==%MINECRAFT% (
+    IF %%A==!MINECRAFT! (
         SET ARRAY[!idx!]=%%B
         SET /a idx+=1
     )
   )
   SET NEWESTFORGE=!ARRAY[0]!
-  IF [!ARRAY[0]!] EQU [] (
-    CLS
-    ECHO: & ECHO: & ECHO: & ECHO   %red% OOPS %blue% - %yellow% NO FORGE VERSIONS EXIST FOR THIS MINECRAFT VERSION %blue% - !MINECRAFT! & ECHO:
-    ECHO   %yellow% PRESS ANY KEY TO TRY A DIFFERENT COMBINATION OF MINECRAFT VERSION AND MODLOADER TYPE %blue% & ECHO: & ECHO: & ECHO:
-    PAUSE
-    GOTO :startover
-  )
+  IF [!ARRAY[0]!] EQU [] SET MAVENISSUE=Y
 )
 
 REM If Neoforge get newest version available of the selected minecraft version.
@@ -1042,7 +1038,7 @@ IF /I !MODLOADER!==NEOFORGE (
   SET "NEWESTNEOFORGE="
   REM This is the initial versions maven that Neoforge used - only for MC 1.20.1
   IF !MINECRAFT!==1.20.1 FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-neoforge-1.20.1-metadata.xml); $data.metadata.versioning.versions.version"') DO (
-    IF %%A==%MINECRAFT% (
+    IF %%A==!MINECRAFT! (
         SET NEWESTNEOFORGE=%%B
     )
   )
@@ -1055,13 +1051,19 @@ IF /I !MODLOADER!==NEOFORGE (
     )
   )
   REM If looking through the maven xml file results in NEWESTNEOFORGE being blank then it found no matches with the current minecraft version.
-  IF [!NEWESTNEOFORGE!] EQU [] (
-    CLS
-    ECHO: & ECHO: & ECHO: & ECHO   %red% OOPS %blue% - %yellow% NO NEOFORGE VERSIONS EXIST FOR THIS MINECRAFT VERSION %blue% - !MINECRAFT! & ECHO:
-    ECHO   %yellow% PRESS ANY KEY TO TRY A DIFFERENT COMBINATION OF MINECRAFT VERSION AND MODLOADER TYPE %blue% & ECHO: & ECHO: & ECHO:
-    PAUSE
-    GOTO :startover
-  )
+  IF [!NEWESTNEOFORGE!] EQU [] SET MAVENISSUE=Y
+)
+
+IF !MAVENISSUE!==Y (
+  CLS
+  ECHO: & ECHO: & ECHO: & ECHO   %red% OOPS %blue% - NO %yellow% !MODLOADER! %blue% VERSIONS WERE FOUND IN THE MAVEN FILE FOR THIS MINECRAFT VERSION %yellow% - !MINECRAFT! %blue% & ECHO:
+  ECHO      OR - OR - OR & ECHO: & ECHO   %red% THE MAVEN FILE %blue% IS SOMEHOW INCOMPLETE / CORRUPTED & ECHO: & ECHO: & ECHO: & ECHO: 
+  ECHO      %yellow% PRESS ANY KEY TO START OVER AND TRY AGAIN.%blue% & ECHO      THE EXISTING MAVEN METADATA FILE WILL BE DELETED TO GET RE-DOWNLOADED NEXT TRY & ECHO:
+  PAUSE
+  IF /I !MODLOADER!==FORGE DEL "%HERE%\univ-utils\maven-forge-metadata.xml" >nul 2>&1
+  IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 DEL "%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml" >nul 2>&1
+  IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 DEL "%HERE%\univ-utils\maven-neoforge-metadata.xml" >nul 2>&1
+  GOTO :startover
 )
 
 :redoenterforge
@@ -1092,7 +1094,7 @@ SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "FROGEENTRY="
 IF NOT DEFINED FROGEENTRY GOTO :redoenterforge
 :: Skips ahead if Y to select the already found newest version was entered
-IF /I "!FROGEENTRY!"=="Y" (
+IF /I !FROGEENTRY!==Y (
   IF !MODLOADER!==FORGE SET FORGE=!NEWESTFORGE!
   IF !MODLOADER!==NEOFORGE SET NEOFORGE=!NEWESTNEOFORGE!
   GOTO :setjava
@@ -1153,11 +1155,26 @@ IF NOT DEFINED MCMAJOR (
 )
 
 IF NOT DEFINED MAINMENU ( 
-  IF !MCMAJOR! LEQ 16 SET JAVAVERSION=8
-  IF !MCMAJOR!==17 SET JAVAVERSION=16
+  IF !MCMAJOR! LEQ 15 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! LEQ 4 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! GEQ 5 SET JAVAVERSION=8
+  IF !MCMAJOR!==17 SET JAVAVERSION=16 & GOTO :justsetram
   IF !MCMAJOR! GEQ 18 SET JAVAVERSION=17
+  IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 SET JAVAVERSION=21 & GOTO :justsetram
+  IF !MCMAJOR! GEQ 21 SET JAVAVERSION=21 & GOTO :justsetram
 )
-IF DEFINED MAINMENU SET INITIALJAVA=!JAVAVERSION!
+
+:: Skips java selection screen if settings S is how the script is passing by, for Minecraft versions that only have 1 valid type of java to pick from.
+:: If java J is the MAINMENU option, user will still get to the selection screen and see that there is only 1 option.
+IF DEFINED MAINMENU IF /I !MAINMENU!==S ( 
+  IF !MCMAJOR! LEQ 15 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! LEQ 4 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! GEQ 5 SET JAVAVERSION=8
+  IF !MCMAJOR!==17 SET JAVAVERSION=16 & GOTO :justsetram
+  IF !MCMAJOR! GEQ 18 SET JAVAVERSION=17
+  IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 SET JAVAVERSION=21 & GOTO :justsetram
+  IF !MCMAJOR! GEQ 21 SET JAVAVERSION=21 & GOTO :justsetram
+)
 
 :javaselect
 CLS
@@ -1170,7 +1187,10 @@ IF !MCMAJOR! LSS 16 ECHO   THE ONLY OPTION FOR MINECRAFT !MINECRAFT! BASED LAUNC
 IF !MCMAJOR! EQU 16 IF !MCMINOR! LEQ 4 ECHO   THE ONLY OPTION FOR MINECRAFT !MINECRAFT! BASED LAUNCHING IS %green% 8 %blue%
 IF !MCMAJOR! EQU 16 IF !MCMINOR! EQU 5 ECHO   THE OPTIONS FOR MINECRAFT !MINECRAFT! BASED LAUNCHING ARE %green% 8 %blue% AND %green% 11 %blue%
 IF !MCMAJOR! EQU 17 ECHO   THE ONLY OPTION FOR MINECRAFT !MINECRAFT! BASED LAUNCHING IS %green% 16 %blue%
-IF !MCMAJOR! GEQ 18 ECHO   THE OPTIONS FOR MINECRAFT !MINECRAFT! BASED LAUNCHING ARE %green% 17 %blue% AND %green% 21 %blue%
+IF !MCMAJOR! GEQ 18 IF !MCMAJOR! LEQ 19 ECHO   THE OPTIONS FOR MINECRAFT !MINECRAFT! BASED LAUNCHING ARE %green% 17 %blue% AND %green% 21 %blue%
+IF !MCMAJOR!==20 IF !MCMINOR! LEQ 5 ECHO   THE OPTIONS FOR MINECRAFT !MINECRAFT! BASED LAUNCHING ARE %green% 17 %blue% AND %green% 21 %blue%
+IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 ECHO   THE ONLY OPTION FOR MINECRAFT !MINECRAFT! BASED LAUNCHING IS %green% 21 %blue%
+IF !MCMAJOR! GEQ 21 ECHO   THE ONLY OPTION FOR MINECRAFT !MINECRAFT! BASED LAUNCHING IS %green% 21 %blue%
 ECHO:
 ECHO   * USING THE NEWER VERSION OPTION IF GIVEN A CHOICE %green% MAY %blue% OR %red% MAY NOT %blue% WORK DEPENDING ON MODS BEING LOADED
 ECHO   * IF A SERVER FAILS TO LAUNCH, YOU SHOULD CHANGE BACK TO THE LOWER DEFAULT VERSION^^! & ECHO: & ECHO:
@@ -1182,12 +1202,12 @@ IF !MCMAJOR! LSS 16 IF !JAVAVERSION! NEQ 8 GOTO :javaselect
 IF !MCMAJOR! EQU 16 IF !MCMINOR! LEQ 4 IF !JAVAVERSION! NEQ 8 GOTO :javaselect
 IF !MCMAJOR! EQU 16 IF !MCMINOR! EQU 5 IF !JAVAVERSION! NEQ 8 IF !JAVAVERSION! NEQ 11 GOTO :javaselect
 IF !MCMAJOR! EQU 17 IF !JAVAVERSION! NEQ 16 GOTO :javaselect
-IF !MCMAJOR! GEQ 18 IF !JAVAVERSION! NEQ 17 IF !JAVAVERSION! NEQ 21 GOTO :javaselect
-:: If the java version was changed, then bypass the eventual firewall rule check for the rest of this window session
-IF !INITIALJAVA! NEQ !JAVAVERSION! SET BYPASSFIREWALLRULECHECK=Y
+IF !MCMAJOR! GEQ 18  IF !MCMAJOR! LEQ 19 IF !JAVAVERSION! NEQ 17 IF !JAVAVERSION! NEQ 21 GOTO :javaselect
+IF !MCMAJOR!==20 IF !MCMINOR! LEQ 5  IF !JAVAVERSION! NEQ 17 IF !JAVAVERSION! NEQ 21 GOTO :javaselect
+IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 IF !JAVAVERSION! NEQ 21 GOTO :javaselect
+IF !MCMAJOR! GEQ 21 IF !JAVAVERSION! NEQ 21 GOTO :javaselect
+
 IF DEFINED MAINMENU IF /I !MAINMENU!==J GOTO :setconfig
-
-
 
 :: BEGIN RAM / MEMORY SETTING
 :justsetram
@@ -1431,8 +1451,6 @@ SET FILECHECKSUM=!OUT[1]!
 IF !JAVACHECKSUM!==!FILECHECKSUM! (
   tar -xf javabinaries.zip
   DEL javabinaries.zip
-  REM Sets a variable to skip checking for firewall rules on a just installed version / folder.
-  SET BYPASSFIREWALLRULECHECK=Y
   ECHO   The downloaded Java binary and hashfile value match - file downloaded correctly is valid & ECHO:
   %DELAY%
 )
@@ -1454,55 +1472,6 @@ SET "JAVANUM=!JAVANUM:-jdk=!"
 SET "JAVANUM=!JAVANUM:-jre=!"
 SET "JAVANUM=!JAVANUM:-LTS=!"
 
-REM BEGIN FIREWALL RULE CHECKING
-REM Skips past the firewall check - when user launches from launch screen the script comes back here to check.
-GOTO :passthroughcheck
-
-:firewallcheck
-
-REM Uses the determined java file/folder location to look for a firewall rule set to use the java.exe
-REM This is done by looking at the latest.log file for a successful world spawn gen, which usually means that the server fully loaded at least once, giving the user time to accept the firewall 'allow'.
-REM If the java version / folder was just installed in this window session, skip this check entirely.  The variable could be un-set but it's easier to avoid shennanigans if it's just disabled for the rest of the session.
-REM If the Private firewall is turned off, skip this check entirely
-FOR /F "delims=" %%A IN ('powershell -Command "$data = Get-NetFirewallProfile -Name Private; $data.Enabled"') DO IF "%%A" NEQ "True" SET FOUNDGOODFIREWALLRULE=Y & GOTO :skipfirewallcheck
-REM Checks for firewall rules set for {inbound / true / allow}, with the strings {TCP} and {JAVAFOLDERPATH} in the line.
-SET "LONGJAVAFOLDER=%HERE%\univ-utils\java\!JAVAFOLDER!\bin\java.exe"
-:: Set a high bar for checking firewall only when latest.log file present, had a world spawn prepare event, and had the same minecraft version - if either turns out false then skip.
-IF EXIST "%HERE%\logs\latest.log" TYPE "logs\latest.log" | FINDSTR /i "Preparing spawn area" >nul 2>&1 && TYPE "logs\latest.log" | FINDSTR /i "!MINECRAFT!" >nul 2>&1 || GOTO :skipfirewallcheck
-
-FOR /F "delims=" %%A IN ('powershell -Command "$data = Get-NetFirewallRule -Direction Inbound -Enabled True -Action Allow; $data.name"') DO (
-  REM Uses string replacement to check for TCP in the line, and if found echos the string to a FINDSTR to look for the java folder path.
-  SET TEMP=%%A
-  IF "!TEMP!" NEQ "!TEMP:TCP=x!" IF "!TEMP!" NEQ "!TEMP:%LONGJAVAFOLDER%=x!" SET FOUNDGOODFIREWALLRULE=Y && GOTO :skipfirewallcheck
-)
-
-IF NOT DEFINED FOUNDGOODFIREWALLRULE (
-  CLS
-  ECHO: & ECHO: & ECHO:
-  ECHO   %red% CONCERN - NO WINDOWS FIREWALL PASS RULE FOR THE INSTALLED JAVA DETECTED - CONCERN %blue%
-  ECHO   %green% ** IF YOU THINK THIS MESSAGE IS INCORRECT YOU CAN STILL PRESS ANY KEY TO CONTINUE ** %blue% & ECHO:
-  ECHO   %blue% IT LOOKS LIKE THIS SERVER FOLDER HAS SUCCESSFULLY RUN PREVIOUSLY WITH THE SAME MINECRAFT VERSION, %blue%
-  ECHO   %blue% BUT NO WINDOWS FIREWALL RULE WAS FOUND FOR THE java.exe SET TO: %blue% & ECHO:
-  ECHO   %blue% 'Direction:Inbound' / 'Action':'Allow' / 'Enabled':'True' %blue% & ECHO:
-  ECHO    %LONGJAVAFOLDER% & ECHO:
-  ECHO        %yellow% - YOU SHOULD GO TO WINDOWS FIREWALL SETTINGS AND REMOVE ANY EXISTING FIREWALL RULES COVERING %blue%
-  ECHO        %yellow%   THIS java.exe LOCATION ^(LISTED ABOVE^), AND ANY RULES COVERING THE PORT YOU HAVE SET. %blue%
-  ECHO        %yellow% - THEN LAUNCH THE SERVER AGAIN AND. JUST. PRESS. 'Allow' ON THE %blue%
-  ECHO        %yellow%   WINDOWS NOTIFICATION POP-UP THAT COMES UP WHILE LAUNCHING. %blue% & ECHO:
-  ECHO     HINT - The default Java that Universalator uses is published by Adoptium.net and
-  ECHO     will be named 'OpenJDK Platform binary' & ECHO: & ECHO: & ECHO:
-  ECHO   %green% ** IF YOU THINK THIS MESSAGE IS INCORRECT YOU CAN STILL PRESS ANY KEY TO CONTINUE ** %blue% & ECHO: & ECHO:
-  PAUSE
-)
-
-:skipfirewallcheck
-IF /I !MODLOADER!==FORGE GOTO :reallydoforge
-IF /I !MODLOADER!==NEOFORGE GOTO :reallydoforge
-IF /I !MODLOADER!==FABRIC GOTO :reallydofabric
-IF /I !MODLOADER!==QUILT GOTO :reallydofabric
-IF /I !MODLOADER!==VANILLA GOTO :reallydofabric
-
-:passthroughcheck
 :: END JAVA SETUP SECTION
 
 SET "MCMINOR="
@@ -1721,7 +1690,6 @@ DIR /b "mods\*.jar" 2>nul | FINDSTR .>nul || (
   GOTO :mainmenu
 )
 
-PAUSE
 SET ASKMODSCHECK=N
   CLS
   ECHO: & ECHO:
@@ -2080,11 +2048,6 @@ ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "FORGELAUNCH="
 IF /I !FORGELAUNCH!==M GOTO :mainmenu
-
-REM Goes to firewall rule checking if nothing bypasses going there
-IF NOT DEFINED FOUNDGOODFIREWALLRULE IF NOT DEFINED BYPASSFIREWALLRULECHECK GOTO :firewallcheck
-REM Script comes back after firewall rule checking
-:reallydoforge
 
 ECHO: & ECHO   Launching... & ping -n 2 127.0.0.1 > nul & ECHO   Launching.. & ping -n 2 127.0.0.1 > nul & ECHO   Launching. & ECHO:
 :: Starts forge depending on what java version is set.  Only correct combinations will launch - others will crash.
@@ -2564,24 +2527,26 @@ IF EXIST minecraft_server.!MINECRAFT!.jar (
 :getvanillajar
 ECHO   Minecraft server JAR not found - attempting to download from Mojang servers & ECHO:
 %DELAY%
-:: Tries to ping the Mojang file server to check that it is online and responding
-SET /a pingmojang=1
-:pingmojangagain
 
-ECHO   Pinging Mojang file server - Attempt # !pingmojang! ... & ECHO:
-SET PINGMOJANG=IDK
-ping -n 2 launchermeta.mojang.com >nul || ping -n 6 launchermeta.mojang.com >nul || SET PINGMOJANG=F
-ping -n 2 piston-meta.mojang.com >nul || ping -n 6 piston-meta.mojang.com >nul || SET PINGMOJANG=F
-IF !PINGMOJANG!==F (
-  SET pingmojang+=1
-  CLS
-  ECHO:
-  ECHO A PING TO THE MOJANG FILE SERVER HAS FAILED
-  ECHO EITHER YOUR CONNECTION IS POOR OR THE FILE SERVER IS OFFLINE
-  ECHO PRESS ANY KEY TO TRY TO PING FILESERVER AGAIN
-  PAUSE
-  GOTO :pingmojangagain
-)
+:: As of May 17th 2024 it seems like Mojang may have ICMP blocked pinging the mojang server locations, so ping checks are currently disabled.
+:: Tries to ping the Mojang file server to check that it is online and responding
+:: ET /a pingmojang=1
+:: :pingmojangagain
+
+:: ECHO   Pinging Mojang file server - Attempt # !pingmojang! ... & ECHO:
+:: SET PINGMOJANG=IDK
+:: ping -n 2 launchermeta.mojang.com >nul || ping -n 6 launchermeta.mojang.com >nul || SET PINGMOJANG=F
+:: ping -n 2 piston-meta.mojang.com >nul || ping -n 6 piston-meta.mojang.com >nul || SET PINGMOJANG=F
+:: IF !PINGMOJANG!==F (
+::   SET pingmojang+=1
+::   CLS
+::   ECHO:
+::   ECHO A PING TO THE MOJANG FILE SERVER HAS FAILED
+::   ECHO EITHER YOUR CONNECTION IS POOR OR THE FILE SERVER IS OFFLINE
+::   ECHO PRESS ANY KEY TO TRY TO PING FILESERVER AGAIN
+::   PAUSE
+::   GOTO :pingmojangagain
+:: )
 
 ECHO   Downloading Minecraft server JAR file... .. . & ECHO:
 
@@ -2597,11 +2562,20 @@ IF EXIST "univ-utils\version_manifest_v2.json" (
     )
   )
 )
-IF !GETMANIFEST!==Y powershell -Command "(New-Object Net.WebClient).DownloadFile('https://launchermeta.mojang.com/mc/game/version_manifest_v2.json', 'univ-utils\version_manifest_v2.json')" >nul
+IF !GETMANIFEST!==Y (
+  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://launchermeta.mojang.com/mc/game/version_manifest_v2.json', 'univ-utils\version_manifest_v2.json')" >nul
+  :: If the download failed to get a file then try again
+  IF NOT EXIST "univ-utils\version_manifest_v2.json" (
+    ECHO: & ECHO   OOPS - THE MINECRAFT VERSION MANIFEST FILE FAILED TO DOWNLOAD & ECHO: & ECHO   PRESS ANY KEY TO TRY DOWNLOADING AGAIN & ECHO: & ECHO:
+    PAUSE
+    GOTO :preparevanilla
+  )
+)
 
 :: Tests if the version.json file needs to be obtained
 IF NOT EXIST "univ-utils\versions" MD "univ-utils\versions"
 IF NOT EXIST "univ-utils\versions\!MINECRAFT!.json" (
+  :: Uses powershell to get the version file URL from the version manifest JSON file
   FOR /F "delims=" %%A IN ('powershell -Command "$data=(Get-Content -Raw -Path 'univ-utils/version_manifest_v2.json' | Out-String | ConvertFrom-Json); $stuff=($data.versions | Where-Object -Property id -Value !MINECRAFT! -EQ); $stuff.url"') DO SET "MCVERSIONURL=%%A"
   ver >nul
   powershell -Command "(New-Object Net.WebClient).DownloadFile('!MCVERSIONURL!', 'univ-utils\versions\!MINECRAFT!.json')" >nul
@@ -2685,9 +2659,6 @@ ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "FABRICLAUNCH="
 IF /I !FABRICLAUNCH!==M GOTO :mainmenu
-
-IF NOT DEFINED FOUNDGOODFIREWALLRULE IF NOT DEFINED BYPASSFIREWALLRULECHECK GOTO :firewallcheck
-:reallydofabric
 
 ECHO: & ECHO   Launching... & ping -n 2 127.0.0.1 >nul & ECHO   Launching.. & ping -n 2 127.0.0.1 >nul & ECHO   Launching. & ECHO:
 
@@ -3372,6 +3343,93 @@ IF NOT DEFINED var (
 GOTO :mainmenu
 
 :: END server.properties FILE EDITING MENU
+
+
+REM BEGIN FIREWALL RULE CHECKING
+:firewallcheck
+
+:: FIND JAVA FOLDER LOCATION - To check if a valid firewall rule is set, first need to find the folder location, or determine if it even exists as installed yet.
+IF NOT EXIST "%HERE%\univ-utils\java" (
+  CLS
+  ECHO: & ECHO: & ECHO   %yellow% A JAVA FOLDER COULD NOT BE FOUND IN THE UNIVERSALATOR STORED FILES. %blue%
+  ECHO: & ECHO       CHECKING THE FIREWALL RULE CAN ONLY BE DONE ONCE A %green% LAUNCH %blue% HAS
+  ECHO       BEEN DONE AND THE JAVA TO BE USED IS INSTALLED. & ECHO: & ECHO:
+  PAUSE
+  GOTO :mainmenu
+)
+
+:: Presets a variable to use as a search string versus java folder names.
+IF !JAVAVERSION!==8 SET FINDFOLDER=jdk8u
+IF !JAVAVERSION!==11 SET FINDFOLDER=jdk-11
+IF !JAVAVERSION!==16 SET FINDFOLDER=jdk-16
+IF !JAVAVERSION!==17 SET FINDFOLDER=jdk-17
+IF !JAVAVERSION!==21 SET FINDFOLDER=jdk-21
+
+:: Uses ver >nul to ensure that the errorlevel is reset to 0, before testing. 
+ver >nul
+FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
+  ECHO "%%A" | FINDSTR "!FINDFOLDER!" >nul
+  IF !ERRORLEVEL!==0 (
+    SET "JAVAFOLDER=%%A"
+  ) ELSE (
+    CLS
+    ECHO: & ECHO: & ECHO   %yellow% A FOLDER FOR THE JAVA TO BE USED COULD NOT BE FOUND IN THE UNIVERSALATOR STORED FILES. %blue%
+    ECHO: & ECHO       CHECKING THE FIREWALL RULE CAN ONLY BE DONE ONCE A %green% LAUNCH %blue% HAS
+    ECHO       BEEN DONE AND THE JAVA TO BE USED IS INSTALLED. & ECHO: & ECHO:
+    PAUSE
+    GOTO :mainmenu
+  )
+)
+
+SET FOUNDGOODFIREWALLRULE=IDK
+
+REM Uses the determined java file/folder location to look for a firewall rule set to use the java.exe
+REM This is done by looking at the latest.log file for a successful world spawn gen, which usually means that the server fully loaded at least once, giving the user time to accept the firewall 'allow'.
+REM If the java version / folder was just installed in this window session, skip this check entirely.  The variable could be un-set but it's easier to avoid shennanigans if it's just disabled for the rest of the session.
+REM If the Private firewall is turned off, skip this check entirely
+FOR /F "delims=" %%A IN ('powershell -Command "$data = Get-NetFirewallProfile -Name Private; $data.Enabled"') DO IF "%%A" NEQ "True" SET FOUNDGOODFIREWALLRULE=Y & GOTO :firewallresult
+REM Checks for firewall rules set for {inbound / true / allow}, with the strings {TCP} and {JAVAFOLDERPATH} in the line.
+SET "LONGJAVAFOLDER=%HERE%\univ-utils\java\!JAVAFOLDER!\bin\java.exe"
+
+FOR /F "delims=" %%A IN ('powershell -Command "$data = Get-NetFirewallRule -Direction Inbound -Enabled True -Action Allow; $data.name"') DO (
+  REM Uses string replacement to check for TCP in the line, and if found echos the string to a FINDSTR to look for the java folder path.
+  SET TEMP=%%A
+  IF "!TEMP!" NEQ "!TEMP:TCP=x!" IF "!TEMP!" NEQ "!TEMP:%LONGJAVAFOLDER%=x!" SET FOUNDGOODFIREWALLRULE=Y
+)
+
+:firewallresult
+
+IF !FOUNDGOODFIREWALLRULE!==Y (
+  CLS
+  ECHO: & ECHO: & ECHO:
+  ECHO   %green% A GOOD FIREWALL RULE WAS DETECTED %blue% & ECHO: & ECHO:
+  ECHO   AT THE LOCATION -
+  ECHO   %yellow% %LONGJAVAFOLDER% %blue% & ECHO: & ECHO: & ECHO:
+  ECHO   %green% ** PRESS ANY KEY TO CONTINUE ** %blue% & ECHO: & ECHO:
+  PAUSE
+)
+
+IF !FOUNDGOODFIREWALLRULE! NEQ Y (
+  CLS
+  ECHO: & ECHO: & ECHO:
+  ECHO   %red% CONCERN - NO WINDOWS FIREWALL PASS RULE FOR THE INSTALLED JAVA DETECTED - CONCERN %blue%
+  ECHO   %green% ** IF YOU THINK THIS MESSAGE IS INCORRECT YOU CAN STILL PRESS ANY KEY TO CONTINUE ** %blue% & ECHO:
+  ECHO   %blue% IT LOOKS LIKE THIS SERVER FOLDER HAS SUCCESSFULLY RUN PREVIOUSLY WITH THE SAME MINECRAFT VERSION, %blue%
+  ECHO   %blue% BUT NO WINDOWS FIREWALL RULE WAS FOUND FOR THE java.exe SET TO: %blue% & ECHO:
+  ECHO   %blue% 'Direction:Inbound' / 'Action':'Allow' / 'Enabled':'True' %blue% & ECHO:
+  ECHO    %LONGJAVAFOLDER% & ECHO:
+  ECHO        %yellow% - YOU SHOULD GO TO WINDOWS FIREWALL SETTINGS AND REMOVE ANY EXISTING FIREWALL RULES COVERING %blue%
+  ECHO        %yellow%   THIS java.exe LOCATION ^(LISTED ABOVE^), AND ANY RULES COVERING THE PORT YOU HAVE SET. %blue%
+  ECHO        %yellow% - THEN LAUNCH THE SERVER AGAIN AND. JUST. PRESS. 'Allow' ON THE %blue%
+  ECHO        %yellow%   WINDOWS NOTIFICATION POP-UP THAT COMES UP WHILE LAUNCHING. %blue% & ECHO:
+  ECHO     HINT - The default Java that Universalator uses is published by Adoptium.net and
+  ECHO     will be named 'OpenJDK Platform binary' & ECHO: & ECHO: & ECHO:
+  ECHO   %green% ** IF YOU THINK THIS MESSAGE IS INCORRECT YOU CAN STILL PRESS ANY KEY TO CONTINUE ** %blue% & ECHO: & ECHO:
+  PAUSE
+)
+
+GOTO :mainmenu
+
 
 :: FUNCTIONS
 
