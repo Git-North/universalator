@@ -1155,25 +1155,25 @@ IF NOT DEFINED MCMAJOR (
 )
 
 IF NOT DEFINED MAINMENU ( 
-  IF !MCMAJOR! LEQ 15 SET "JAVAVERSION=8" & GOTO :justsetram
-  IF !MCMAJOR! LEQ 16 IF !MCMINOR! LEQ 4 SET "JAVAVERSION=8" & GOTO :justsetram
-  IF !MCMAJOR! LEQ 16 IF !MCMINOR! GEQ 5 SET "JAVAVERSION=8"
-  IF !MCMAJOR!==17 SET "JAVAVERSION=16" & GOTO :justsetram
-  IF !MCMAJOR! GEQ 18 SET "JAVAVERSION=17"
-  IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 SET "JAVAVERSION=21" & GOTO :justsetram
-  IF !MCMAJOR! GEQ 21 SET "JAVAVERSION=21" & GOTO :justsetram
+  IF !MCMAJOR! LEQ 15 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! LEQ 4 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! GEQ 5 SET JAVAVERSION=8
+  IF !MCMAJOR!==17 SET JAVAVERSION=16 & GOTO :justsetram
+  IF !MCMAJOR! GEQ 18 SET JAVAVERSION=17
+  IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 SET JAVAVERSION=21 & GOTO :justsetram
+  IF !MCMAJOR! GEQ 21 SET JAVAVERSION=21 & GOTO :justsetram
 )
 
 :: Skips java selection screen if settings S is how the script is passing by, for Minecraft versions that only have 1 valid type of java to pick from.
 :: If java J is the MAINMENU option, user will still get to the selection screen and see that there is only 1 option.
 IF DEFINED MAINMENU IF /I !MAINMENU!==S ( 
-  IF !MCMAJOR! LEQ 15 SET "JAVAVERSION=8" & GOTO :justsetram
-  IF !MCMAJOR! LEQ 16 IF !MCMINOR! LEQ 4 SET "JAVAVERSION=8" & GOTO :justsetram
-  IF !MCMAJOR! LEQ 16 IF !MCMINOR! GEQ 5 SET "JAVAVERSION=8"
-  IF !MCMAJOR!==17 SET "JAVAVERSION=16" & GOTO :justsetram
-  IF !MCMAJOR! GEQ 18 SET "JAVAVERSION=17"
-  IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 SET "JAVAVERSION=21" & GOTO :justsetram
-  IF !MCMAJOR! GEQ 21 SET "JAVAVERSION=21" & GOTO :justsetram
+  IF !MCMAJOR! LEQ 15 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! LEQ 4 SET JAVAVERSION=8 & GOTO :justsetram
+  IF !MCMAJOR! LEQ 16 IF !MCMINOR! GEQ 5 SET JAVAVERSION=8
+  IF !MCMAJOR!==17 SET JAVAVERSION=16 & GOTO :justsetram
+  IF !MCMAJOR! GEQ 18 SET JAVAVERSION=17
+  IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 SET JAVAVERSION=21 & GOTO :justsetram
+  IF !MCMAJOR! GEQ 21 SET JAVAVERSION=21 & GOTO :justsetram
 )
 
 :javaselect
@@ -1428,7 +1428,6 @@ ECHO   Downloading Java !JAVAVERSION! newest version from Adoptium & ECHO:
 :: Sets a variable for the URL string to use to use the Adoptium URL Api - it just makes the actual command later easier deal with.
 SET "ADOPTIUMDL=https://api.adoptium.net/v3/assets/feature_releases/!JAVAVERSION!/ga?architecture=x64&heap_size=normal&image_type=!IMAGETYPE!&jvm_impl=hotspot&os=windows&page_size=1&project=jdk&sort_method=DEFAULT&sort_order=DESC&vendor=eclipse"
 ver >nul
-
 :: Gets the download URL for the newest release binaries ZIP using the URL Api and then in the same powershell command downloads it.  This avoids having to manipulate URL links with % signs in them in the CMD environment which is tricky.
 powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('!ADOPTIUMDL!') | Out-String | ConvertFrom-Json)); (New-Object Net.WebClient).DownloadFile($data.binaries.package.link, '%HERE%\univ-utils\java\javabinaries.zip')"
 
@@ -2315,7 +2314,7 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
   IF !ERRORLEVEL!==0 (
     FOR /F %%A IN ('powershell -Command "$json=(tar xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.id"') DO SET SERVERMODS[%%f].id=%%A
     FOR /F %%A IN ('powershell -Command "$json=(tar xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.minecraft.environment"') DO (
-      IF %%A==client SET SERVERMODS[%%f].environ=C
+      IF %%A==client IF !SERVERMODS[%%f].id! NEQ modmenu SET SERVERMODS[%%f].environ=C
     )
     FOR /F %%B IN ('powershell -Command "$json=(tar xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.depends.id"') DO (
                 IF %%B NEQ quilt_loader IF %%B NEQ minecraft IF %%B NEQ quilt_base IF %%B NEQ java IF %%B NEQ cloth-config IF %%B NEQ cloth-config2 IF %%B NEQ fabric-language-kotlin IF %%B NEQ iceberg IF %%B NEQ quilted_fabric_api IF %%B NEQ creativecore IF %%B NEQ architectury ECHO %%B>>univ-utils\allfabricdeps.txt
@@ -2364,7 +2363,7 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
     IF "!TEMP!" NEQ "!TEMP:;environment;=x!" (
       SET "TEMP=!TEMP: =!"
       SET "TEMP=!TEMP::=!"
-      IF "!TEMP!" NEQ "!TEMP:;environment;;client;,=x!" (
+      IF "!TEMP!" NEQ "!TEMP:;environment;;client;,=x!" IF !SERVERMODS[%%f].id! NEQ modmenu (
         SET SERVERMODS[%%f].environ=C
         SET FOUNDFABRICCLIENTS=Y
       ) ELSE ( 
