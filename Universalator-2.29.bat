@@ -605,6 +605,7 @@ IF EXIST settings-universalator.txt (
   IF /I !MODLOADER!==QUILT SET QUILTLOADER=!MODLOADERVERSION!
 )
 IF NOT EXIST univ-utils MD univ-utils
+SET /a RESTARTCOUNT=0
 SET "MAINMENU="
 
 CLS
@@ -662,6 +663,7 @@ IF /I !MAINMENU!==ZIP GOTO :zipit
 IF /I !MAINMENU!==PORT GOTO :portedit
 IF /I !MAINMENU!==PROPS GOTO :editserverprops
 IF /I !MAINMENU!==FIREWALL GOTO :firewallcheck
+IF /I !MAINMENU!==RESTART GOTO :restarttoggle
 
 :: If no recognized entries were made then go back to main menu
 
@@ -2095,6 +2097,13 @@ IF /I !MODLOADER!==NEOFORGE (
   IF !MINECRAFT! NEQ 1.20.1 %JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %*
 )
 
+:: If auto restart is enabled, check if server was purposely shut down or if should restart
+IF DEFINED RESTART IF !RESTART!==Y IF EXIST "logs\latest.log" FINDSTR /I "Stopping the server" "logs\latest.log" || (
+  SET /a RESARTCOUNT+=1
+  IF !RESTARTCOUNT! GEQ 6 GOTO :logsscan
+  GOTO :launchneoforge
+)
+
 :: Go to common scan logs section
 GOTO :logsscan
 
@@ -2674,6 +2683,13 @@ IF /I !MODLOADER!==QUILT (
 )
 IF /I !MODLOADER!==VANILLA (
 %JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% -jar minecraft_server.!MINECRAFT!.jar nogui
+)
+
+:: If auto restart is enabled, check if server was purposely shut down or if should restart
+IF DEFINED RESTART IF !RESTART!==Y IF EXIST "logs\latest.log" FINDSTR /I "Stopping the server" "logs\latest.log" || (
+  SET /a RESARTCOUNT+=1
+  IF !RESTARTCOUNT! GEQ 6 GOTO :logsscan
+  GOTO :launchfabric
 )
 
 GOTO :logsscan
@@ -3367,18 +3383,19 @@ IF !JAVAVERSION!==21 SET FINDFOLDER=jdk-21
 
 :: Uses ver >nul to ensure that the errorlevel is reset to 0, before testing. 
 ver >nul
+
+SET "JAVAFOLDER="
 FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
-  ECHO "%%A" | FINDSTR "!FINDFOLDER!" >nul
-  IF !ERRORLEVEL!==0 (
-    SET "JAVAFOLDER=%%A"
-  ) ELSE (
+  ECHO "%%A" | FINDSTR "!FINDFOLDER!" >nul && SET "JAVAFOLDER=%%A"
+)
+
+IF NOT DEFINED JAVAFOLDER (
     CLS
     ECHO: & ECHO: & ECHO   %yellow% A FOLDER FOR THE JAVA TO BE USED COULD NOT BE FOUND IN THE UNIVERSALATOR STORED FILES. %blue%
     ECHO: & ECHO       CHECKING THE FIREWALL RULE CAN ONLY BE DONE ONCE A %green% LAUNCH %blue% HAS
     ECHO       BEEN DONE AND THE JAVA TO BE USED IS INSTALLED. & ECHO: & ECHO:
     PAUSE
     GOTO :mainmenu
-  )
 )
 
 SET FOUNDGOODFIREWALLRULE=IDK
@@ -3430,6 +3447,31 @@ IF !FOUNDGOODFIREWALLRULE! NEQ Y (
 
 GOTO :mainmenu
 
+:restarttoggle
+
+IF DEFINED RESTART IF !RESTART!==N (
+  SET RESTART=Y
+) ELSE (
+  SET RESTART=N
+)
+IF NOT DEFINED RESTART SET RESTART=Y
+
+IF !RESTART!==Y (
+  CLS
+  ECHO: & ECHO: & ECHO:
+  ECHO   %green% AUTOMATIC RESTARTS ARE ENABLED %blue% & ECHO: & ECHO:
+  ECHO   %yellow% SERVER PROCESS WILL RESTART UP TO 5 TIMES, %blue% & ECHO   %yellow% UNLESS IT IS PURPOSELY STOPPED USING THE /STOP COMMAND. %blue% & ECHO: & ECHO: & ECHO:
+  ECHO   %green% ** PRESS ANY KEY TO CONTINUE ** %blue% & ECHO: & ECHO:
+  PAUSE
+) ELSE (
+  CLS
+  ECHO: & ECHO: & ECHO:
+  ECHO   %yellow% AUTOMATIC RESTARTS ARE DISABLED %blue% & ECHO: & ECHO:
+  ECHO   %yellow% SERVER PROCESS WILL NOT RESTART ITSELF. %blue% & ECHO: & ECHO:
+  ECHO   %green% ** PRESS ANY KEY TO CONTINUE ** %blue% & ECHO: & ECHO:
+  PAUSE
+)
+GOTO :mainmenu
 
 :: FUNCTIONS
 
