@@ -1414,7 +1414,7 @@ IF !FOUNDJAVA!==OLD (
   IF !ERRORLEVEL!==0 (
     ECHO   Java folder !JAVAFOLDER! is in fact the newest version available - using it for Java !JAVAVERSION! & ECHO:
     %DELAY%
-    SET JAVAFILE="univ-utils\java\!JAVAFOLDER!\bin\java.exe"
+    SET "JAVAFILE=%HERE%\univ-utils\java\!JAVAFOLDER!\bin\java.exe"
     GOTO :javafileisset
   ) ELSE (
     :: Removes the old java folder if the test failed and the newest release was not found in the folder name.
@@ -1426,6 +1426,7 @@ IF !FOUNDJAVA!==OLD (
 :: At this point Java was either not found or was old with a newer version available as release from Adoptium.
 PUSHD "%HERE%\univ-utils\java"
 
+:javaretry
 ECHO   Downloading Java !JAVAVERSION! newest version from Adoptium & ECHO:
 
 :: Sets a variable for the URL string to use to use the Adoptium URL Api - it just makes the actual command later easier deal with.
@@ -1434,8 +1435,9 @@ ver >nul
 :: Gets the download URL for the newest release binaries ZIP using the URL Api and then in the same powershell command downloads it.  This avoids having to manipulate URL links with % signs in them in the CMD environment which is tricky.
 powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('!ADOPTIUMDL!') | Out-String | ConvertFrom-Json)); (New-Object Net.WebClient).DownloadFile($data.binaries.package.link, '%HERE%\univ-utils\java\javabinaries.zip')"
 
-IF NOT EXIST javabinaries.zip (
+IF NOT EXIST "%HERE%\univ-utils\java\javabinaries.zip" (
   ECHO: & ECHO: & ECHO   JAVA BINARIES ZIP FILE FAILED TO DOWNLOAD - PRESS ANY KEY TO TRY AGAIN! & ECHO: & ECHO:
+  ECHO: & ECHO   Retrying Adoptium Java download... & ping -n 2 127.0.0.1 > nul & ECHO   Retrying  Adoptium Java download.. & ping -n 2 127.0.0.1 > nul & ECHO   Retrying  Adoptium Java download. & ECHO:
   GOTO :javaretry
 )
 
