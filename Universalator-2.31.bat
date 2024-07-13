@@ -1367,7 +1367,7 @@ FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
     FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\java\%%A' -OlderThan (Get-Date).AddMonths(-2.5)"') DO (
       :: If False then that means the folder is newer than 3 months - go ahead and use that folder for java, then move on!
       IF %%G==False (
-        SET JAVAFILE="univ-utils\java\%%A\bin\java.exe"
+        SET "JAVAFILE=univ-utils\java\%%A\bin\java.exe"
         GOTO :javafileisset
       )
       :: If True that means that it is older than 2.5 months old and is marked as OLD and folder value stored for testing vs the current published release later.
@@ -1598,7 +1598,7 @@ GOTO :pingforgeagain
 IF EXIST forge-installer.jar (
   ECHO   Installer downloaded. Installing... & ECHO:
   %DELAY%
-  !JAVAFILE! -Djava.net.preferIPv4Stack=true -XX:+UseG1GC -jar forge-installer.jar --installServer
+  "%JAVAFILE%" -Djava.net.preferIPv4Stack=true -XX:+UseG1GC -jar forge-installer.jar --installServer
   DEL forge-installer.jar >nul 2>&1
   DEL forge-installer.jar.log >nul 2>&1
   %DELAY%
@@ -2063,24 +2063,24 @@ ver >nul
 IF /I !MODLOADER!==NEOFORGE GOTO :actuallylaunchneoforge
 :: Special case forge.jar filenames for older OLD versions
 IF !MINECRAFT!==1.6.4 (
-%JAVAFILE% -server !MAXRAM! %ARGS% %OTHERARGS% -jar minecraftforge-universal-1.6.4-!FORGE!.jar nogui
+"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar minecraftforge-universal-1.6.4-!FORGE!.jar nogui
 ) 
 IF !MINECRAFT!==1.7.10 (
-%JAVAFILE% -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.7.10-!FORGE!-1.7.10-universal.jar nogui
+"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.7.10-!FORGE!-1.7.10-universal.jar nogui
 ) 
 IF !MINECRAFT!==1.8.9 (
-%JAVAFILE% -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.8.9-!FORGE!-1.8.9-universal.jar nogui
+"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.8.9-!FORGE!-1.8.9-universal.jar nogui
 ) 
 IF !MINECRAFT!==1.9.4 (
-%JAVAFILE% -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.9.4-!FORGE!-1.9.4-universal.jar nogui
+"%JAVAFILE%"" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.9.4-!FORGE!-1.9.4-universal.jar nogui
 ) 
 IF !MINECRAFT!==1.10.2 (
-%JAVAFILE% -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.10.2-!FORGE!-universal.jar nogui
+"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.10.2-!FORGE!-universal.jar nogui
 ) 
 
 :: General case forge.jar filenames for regular OLD Minecraft Forge newer (higher numbered) than 1.10.2 but older than 1.17
 IF !MCMAJOR! LEQ 16 IF !MINECRAFT! NEQ 1.6.4 IF !MINECRAFT! NEQ 1.7.10 IF !MINECRAFT! NEQ 1.8.9 IF !MINECRAFT! NEQ 1.9.4 IF !MINECRAFT! NEQ 1.10.2 (
-%JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!.jar nogui
 ) 
 :: Launching Minecraft versions 1.17 and newer.  As of 1.20.4 Forge went back to an executable JAR file that gets put in the main directory.
 IF !MCMAJOR! GEQ 17 SET LAUNCHFORGE=NEWOLD
@@ -2088,16 +2088,16 @@ IF !MCMAJOR! EQU 20 IF !MCMINOR! GEQ 4 SET LAUNCHFORGE=NEWNEW
 IF !MCMAJOR! GEQ 21 SET LAUNCHFORGE=NEWNEW
 
 IF !LAUNCHFORGE!==NEWOLD (
-  %JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
+  "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
 )
 IF !LAUNCHFORGE!==NEWNEW (
-  %JAVAFILE% -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
+  "%JAVAFILE%"" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
 )
 
 :actuallylaunchneoforge
 IF /I !MODLOADER!==NEOFORGE (
-  IF !MINECRAFT!==1.20.1 %JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %*
-  IF !MINECRAFT! NEQ 1.20.1 %JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %*
+  IF !MINECRAFT!==1.20.1 "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %*
+  IF !MINECRAFT! NEQ 1.20.1 "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %*
 )
 
 :: If auto restart is enabled, check if server was purposely shut down or if should restart
@@ -2174,7 +2174,7 @@ SET fabricinstallerhecksum=!FOUT[1]!
 :: IF yes then install fabric server files
 IF EXIST fabric-installer.jar (
     IF /I !INSTALLERVAL!==!fabricinstallerhecksum! (
-      %JAVAFILE% -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !MINECRAFT! -downloadMinecraft
+      "%JAVAFILE%" -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !MINECRAFT! -downloadMinecraft
     ) ELSE (
       DEL fabric-installer.jar
       ECHO:
@@ -2273,7 +2273,7 @@ IF "%HERE%" NEQ "%HERE: =%" (
 )
 IF EXIST quilt-installer.jar (
     IF /I !INSTALLERVAL!==!quiltinstallerhecksum! (
-      %JAVAFILE% -XX:+UseG1GC -jar quilt-installer.jar install server !MINECRAFT! !QUILTLOADER! --download-server --install-dir=%cd%
+      "%JAVAFILE%" -XX:+UseG1GC -jar quilt-installer.jar install server !MINECRAFT! !QUILTLOADER! --download-server --install-dir=%cd%
     ) ELSE (
       DEL quilt-installer.jar
       ECHO:
@@ -2679,13 +2679,13 @@ TITLE Universalator - !MINECRAFT! !MODLOADER!
 
 :: Actually launch the server!
 IF /I !MODLOADER!==FABRIC (
-%JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% -jar fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar nogui
 )
 IF /I !MODLOADER!==QUILT (
-%JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% -jar quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar nogui
 )
 IF /I !MODLOADER!==VANILLA (
-%JAVAFILE% !MAXRAM! %ARGS% %OTHERARGS% -jar minecraft_server.!MINECRAFT!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar minecraft_server.!MINECRAFT!.jar nogui
 )
 
 :: If auto restart is enabled, check if server was purposely shut down or if should restart
