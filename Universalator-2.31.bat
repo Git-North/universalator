@@ -1,4 +1,14 @@
 @ECHO OFF
+:: North's edits start
+@ECHO OFF
+set PATH=%LOCALAPPDATA%\MEGAcmd;%PATH%
+CALL mega-sync %cd% po8xf57zs@mozmail.com:shelter_server
+CALL mega-transfers
+cd ..
+START "" ".\playit-0.9.3-signed.exe"
+cd %~dp0
+
+:: North's edits end
 
 REM    The Universalator - Modded Minecraft Server Installation / Launching Program.
 REM    Copyright (C) <2023>  <Kerry Sherwin>
@@ -690,7 +700,7 @@ ECHO:    %green% RESTART %blue% = TOGGLE AUTOMATIC RESTART ON UNPLANNED SHUTDOWN
 ECHO:    %green% FIREWALL %blue% = CHECK FOR A VALID FIREWALL RULE SETTING FOR JAVA
 ECHO:    %green% UPNP %blue%     = UPNP PORT FORWARDING MENU
 ECHO:    %green% MCREATOR %blue% = SCAN MOD FILES FOR MCREATOR MADE MODS
-ECHO:    %green% OVERRIDE %blue% = USE CURRENTLY SET SYSTEM JAVA PATH INSTEAD OF ADOPTIUM JAVA
+ECHO:    %green% OVERRIDE %blue% = USE CURRENTLY SET SYSTEM JAVA PATH INSTEAD OF INDEPENDENT JAVA
 ECHO:    %green% ZIP %blue%      = MENU FOR CREATING SERVER PACK ZIP FILE & ECHO: & ECHO: & ECHO:
 GOTO :allcommandsentry
 
@@ -1348,10 +1358,10 @@ ECHO:
 :: BEGIN JAVA SETUP SECTION
 :: Presets a variable to use as a search string versus java folder names.
 IF !JAVAVERSION!==8 SET FINDFOLDER=jdk8u
-IF !JAVAVERSION!==11 SET FINDFOLDER=jdk-11
-IF !JAVAVERSION!==16 SET FINDFOLDER=jdk-16
-IF !JAVAVERSION!==17 SET FINDFOLDER=jdk-17
-IF !JAVAVERSION!==21 SET FINDFOLDER=jdk-21
+IF !JAVAVERSION!==11 SET FINDFOLDER=jdk11
+IF !JAVAVERSION!==16 SET FINDFOLDER=zulu16
+IF !JAVAVERSION!==17 SET FINDFOLDER=jdk17
+IF !JAVAVERSION!==21 SET FINDFOLDER=jdk21
 
 :checkforjava
 IF NOT EXIST "%HERE%\univ-utils\java" MD "%HERE%\univ-utils\java"
@@ -1382,7 +1392,7 @@ FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
   )
 )
 :: If script has not skipped ahead by now then a Java folder was not found for the major Java version searched for.
-ECHO   Universalator Java folder not found - Getting Java - !JAVAVERSION! - from Adoptium. & ECHO:
+ECHO   Universalator Java folder not found - Getting Java - !JAVAVERSION! - & ECHO:
 %DELAY%
 
 :javaold
@@ -1391,12 +1401,8 @@ ECHO   Universalator Java folder not found - Getting Java - !JAVAVERSION! - from
 IF !FOUNDJAVA!==Y GOTO :javafileisset
 
 :: Java 16 is not a LTS version and never had JRE releases so this is just being set as a variable because of that... Thanks Minecraft 1.17.
-IF !JAVAVERSION!==16 SET "IMAGETYPE=jdk"
-IF !JAVAVERSION! NEQ 16 SET "IMAGETYPE=jre"
-
-:: If the old flag was put on FOUNDJAVA then test the the folder name of the existing old version found versus what the adoptium API says the newest release is for that Java version.
+::DDDD
 IF !FOUNDJAVA!==OLD (
-  REM Uses the Adoptium URL Api to return the JSON for the parameters specified, and then the FOR loop pulls the last value printed which is that value in the JSON variable that got made.
   REM Java 8 used a bit of a different format for it's version information so a different value is used form the JSON.
 
   IF !JAVAVERSION!==8 FOR /F %%A IN ('powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('https://api.adoptium.net/v3/assets/feature_releases/8/ga?architecture=x64&heap_size=normal&image_type=jre&jvm_impl=hotspot&os=windows&page_size=1&project=jdk&sort_method=DEFAULT&sort_order=DESC&vendor=eclipse') | Out-String | ConvertFrom-Json)); $data.release_name"') DO SET NEWESTJAVA=%%A
@@ -1418,31 +1424,35 @@ IF !FOUNDJAVA!==OLD (
     GOTO :javafileisset
   ) ELSE (
     :: Removes the old java folder if the test failed and the newest release was not found in the folder name.
-    ECHO   Java folder !JAVAFOLDER! is not the newest version available.  & ECHO   Replacing with the newest Java !JAVAVERSION! version from Adoptium^^! & ECHO:
+    ECHO   Java folder !JAVAFOLDER! is not the newest version available.  & ECHO   Replacing with the newest Java !JAVAVERSION! ^^! & ECHO:
     RD /s /q "%HERE%\univ-utils\java\!JAVAFOLDER!" >nul
   ) 
 )
 
-:: At this point Java was either not found or was old with a newer version available as release from Adoptium.
 PUSHD "%HERE%\univ-utils\java"
 
 :javaretry
-ECHO   Downloading Java !JAVAVERSION! newest version from Adoptium & ECHO:
+ECHO   Downloading Java !JAVAVERSION! & ECHO:
 
-:: Sets a variable for the URL string to use to use the Adoptium URL Api - it just makes the actual command later easier deal with.
-SET "ADOPTIUMDL=https://api.adoptium.net/v3/assets/feature_releases/!JAVAVERSION!/ga?architecture=x64&heap_size=normal&image_type=!IMAGETYPE!&jvm_impl=hotspot&os=windows&page_size=1&project=jdk&sort_method=DEFAULT&sort_order=DESC&vendor=eclipse"
+SET "AmazonCorettoDL=https://corretto.aws/downloads/latest/amazon-corretto-!JAVAVERSION!-x64-windows-jdk.zip"
 ver >nul
+SET "AzulZuluDL=https://www.azul.com/core-post-download/?endpoint=zulu&uuid=126ba2e7-1039-48ed-a610-53cca824bfa8"
+::AAAA
+IF !JAVAVERSION!==16 SET "DL=!AzulZuluDL!"
+IF !JAVAVERSION! NEQ 16 SET "DL=!AmazonCorettoDL!"
+
 :: Gets the download URL for the newest release binaries ZIP using the URL Api and then in the same powershell command downloads it.  This avoids having to manipulate URL links with % signs in them in the CMD environment which is tricky.
-powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('!ADOPTIUMDL!') | Out-String | ConvertFrom-Json)); (New-Object Net.WebClient).DownloadFile($data.binaries.package.link, '%HERE%\univ-utils\java\javabinaries.zip')"
+curl -L !DL! -o "%HERE%\univ-utils\java\javabinaries.zip"
 
 IF NOT EXIST "%HERE%\univ-utils\java\javabinaries.zip" (
   ECHO: & ECHO: & ECHO   JAVA BINARIES ZIP FILE FAILED TO DOWNLOAD - PRESS ANY KEY TO TRY AGAIN! & ECHO: & ECHO:
-  ECHO: & ECHO   Retrying Adoptium Java download... & ping -n 2 127.0.0.1 > nul & ECHO   Retrying  Adoptium Java download.. & ping -n 2 127.0.0.1 > nul & ECHO   Retrying  Adoptium Java download. & ECHO:
+  ECHO: & ECHO   Retrying Amazon-Coretto Java download... & ping -n 2 127.0.0.1 > nul & ECHO   Retrying  Amazon-Coretto Java download.. & ping -n 2 127.0.0.1 > nul & ECHO   Retrying  Amazon-Coretto Java download. & ECHO:
   GOTO :javaretry
 )
 
-:: Gets the SHA256 checksum hash of the downloaded java binary file using the Adoptium URL Api.
-FOR /F %%A IN ('powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('https://api.adoptium.net/v3/assets/feature_releases/!JAVAVERSION!/ga?architecture=x64&heap_size=normal&image_type=!IMAGETYPE!&jvm_impl=hotspot&os=windows&page_size=1&project=jdk&sort_method=DEFAULT&sort_order=DESC&vendor=eclipse') | Out-String | ConvertFrom-Json)); $data.binaries.package.checksum"') DO SET JAVACHECKSUM=%%A
+IF !JAVAVERSION! NEQ 16 (FOR /F %%A IN ('curl -sL https://corretto.aws/downloads/latest_sha256/amazon-corretto-!JAVAVERSION!-x64-windows-jdk.zip') DO SET JAVACHECKSUM=%%A
+)
+IF !JAVAVERSION! == 16 SET "JAVACHECKSUM=992d1114a2362f4d90a85438ab7faecd600e4a6dc5dfe6e552cc3df06242dcba"
 
 :: Compares a checksum of the actual downloaded file to the one obtained above as the correct value to have.
 set idx=0 
@@ -1453,7 +1463,7 @@ FOR /F %%F IN ('certutil -hashfile javabinaries.zip SHA256') DO (
 SET FILECHECKSUM=!OUT[1]!
 
 :: Checks to see if the calculated checksum hash is the same as stored value above - unzips file if valid
-IF !JAVACHECKSUM!==!FILECHECKSUM! (
+IF %JAVACHECKSUM%==!FILECHECKSUM! (
   tar -xf javabinaries.zip
   DEL javabinaries.zip
   ECHO   The downloaded Java binary and hashfile value match - file downloaded correctly is valid & ECHO:
@@ -2035,7 +2045,7 @@ ECHO        CURRENT SERVER SETTINGS:
 ECHO        MINECRAFT - !MINECRAFT!
 IF /I !MODLOADER!==FORGE ECHO        FORGE - !FORGE!
 IF /I !MODLOADER!==NEOFORGE ECHO        NEOFORGE - !NEOFORGE!
-IF !OVERRIDE!==N ECHO        JAVA - !JAVAVERSION! / Adoptium !JAVANUM!
+IF !OVERRIDE!==N ECHO        JAVA - !JAVAVERSION! / !JAVANUM!
 IF !OVERRIDE!==Y ECHO        JAVA - CUSTOM OVERRIDE
 ECHO: & ECHO ============================================
 ECHO   %yellow% CURRENT NETWORK SETTINGS:%blue%
@@ -2652,7 +2662,7 @@ ECHO      CURRENT SERVER SETTINGS:
 ECHO        MINECRAFT ----- !MINECRAFT!
 IF !MODLOADER!==FABRIC ECHO        !MODLOADER! LOADER - !FABRICLOADER!
 IF !MODLOADER!==QUILT ECHO        !MODLOADER! LOADER - !QUILTLOADER!
-IF !OVERRIDE!==N ECHO        JAVA - !JAVAVERSION! / Adoptium !JAVANUM!
+IF !OVERRIDE!==N ECHO        JAVA - !JAVAVERSION! / !JAVANUM!
 IF !OVERRIDE!==Y ECHO        JAVA - CUSTOM OVERRIDE
 ECHO:
 ECHO ============================================
@@ -3442,7 +3452,7 @@ IF !FOUNDGOODFIREWALLRULE! NEQ Y (
   ECHO        %yellow%   THIS java.exe LOCATION ^(LISTED ABOVE^), AND ANY RULES COVERING THE PORT YOU HAVE SET. %blue%
   ECHO        %yellow% - THEN LAUNCH THE SERVER AGAIN AND. JUST. PRESS. 'Allow' ON THE %blue%
   ECHO        %yellow%   WINDOWS NOTIFICATION POP-UP THAT COMES UP WHILE LAUNCHING. %blue% & ECHO:
-  ECHO     HINT - The default Java that Universalator uses is published by Adoptium.net and
+  ECHO     HINT - The default Java that Universalator uses is Amazon Coretto for all LTS builds (21 17 11 8) and Azul Zulu for supported STS build (16) 
   ECHO     will be named 'OpenJDK Platform binary' & ECHO: & ECHO: & ECHO:
   ECHO   %green% ** IF YOU THINK THIS MESSAGE IS INCORRECT YOU CAN STILL PRESS ANY KEY TO CONTINUE ** %blue% & ECHO: & ECHO:
   PAUSE
