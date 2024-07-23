@@ -452,10 +452,8 @@ IF DEFINED IPLINE IF /I !CHOOSE_IP!==CORRECT (
         IF %%T NEQ %IPLINE% IF "!serverprops[%%T]!" NEQ "" IF "!serverprops[%%T]!" NEQ "allow-flight=false" IF "!serverprops[%%T]!" NEQ "online-mode=false" ECHO !serverprops[%%T]!>>server.properties2
         IF "!serverprops[%%T]!"=="allow-flight=false" ECHO allow-flight=true>>server.properties2
         IF "!serverprops[%%T]!"=="online-mode=false" ECHO online-mode=true>>server.properties2
-        IF %%T==%IPLINE% ECHO server-ip=>>server.properties2
+        IF %%T==%IPLINE% ECHO server-ip=
     )
-    DEL server.properties
-    RENAME server.properties2 server.properties
     :: Skips past the last section since the job is done for this case.
     GOTO :skipserverproperties
 )
