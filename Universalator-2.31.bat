@@ -1,13 +1,13 @@
 @ECHO OFF
-:: if you are gonna do any automation xo it between here
-:automationsSart
+:: if you are gonna do any automation/scripting do it between here
+:scriptingStart
 
 
 
 
 
 
-:automationEnd
+:scriptingEnd
 cd %~dp0
 
 
