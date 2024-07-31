@@ -1,14 +1,15 @@
 @ECHO OFF
-:: North's edits start
-@ECHO OFF
-set PATH=%LOCALAPPDATA%\MEGAcmd;%PATH%
-CALL mega-sync %cd% po8xf57zs@mozmail.com:shelter_server
-CALL mega-transfers
-cd ..
-START "" ".\playit-0.9.3-signed.exe"
+:: if you are gonna do any automation xo it between here
+:automationsSart
+
+
+
+
+
+
+:automationEnd
 cd %~dp0
 
-:: North's edits end
 
 REM    The Universalator - Modded Minecraft Server Installation / Launching Program.
 REM    Copyright (C) <2023>  <Kerry Sherwin>
