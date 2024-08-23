@@ -127,7 +127,7 @@ IF NOT EXIST "%HERE%\univ-utils\license.txt" WHERE powershell >nul && MD univ-ut
 SET "LASTCHAR=%cd:~-1%"
 ECHO ^%LASTCHAR% | FINDSTR "[a-z] [A-Z] [0-9]" >nul || (
   CLS
-  ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO      %red% "%cd%" %blue% & ECHO. & ECHO      THE ABOVE FOLDER LOCATION ENDS IN A SPECIAL CHARACTER - %red% ^!LASTCHAR! %blue% & ECHO:
+  ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO      %red% %cd% %blue% & ECHO. & ECHO      THE ABOVE FOLDER LOCATION ENDS IN A SPECIAL CHARACTER - %red% ^!LASTCHAR! %blue% & ECHO:
   ECHO      REMOVE THIS SPECIAL CHARACTER FROM THE END OF OF THE FOLDER NAME OR USE A DIFFERENT FOLDER & ECHO: & ECHO: & ECHO:
   ECHO        ** SPECIAL CHARACTERS AT THE END OF FOLDER NAMES BREAKS CERTAIN COMMAND FUNCTIONS THE SCRIPT USES
   ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO:
@@ -138,10 +138,20 @@ ECHO ^%LASTCHAR% | FINDSTR "[a-z] [A-Z] [0-9]" >nul || (
 FOR /F "delims=" %%A IN ('powershell -Command "ECHO (get-location).path | FINDSTR "^^!""') DO SET ISEXCLFOUND=%%A
 IF DEFINED ISEXCLFOUND IF "%CD%"=="!ISEXCLFOUND!" (
     setlocal disabledelayedexpansion
-    ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO   %red% "%cd%" %blue% & ECHO. & ECHO   THE ABOVE FOLDER PATH CONTAINS AN EXCLAMATION MARK CHARACTER  - %red% ^! %blue% & ECHO.
+    ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO   %red% %cd% %blue% & ECHO. & ECHO   THE ABOVE FOLDER PATH CONTAINS AN EXCLAMATION MARK CHARACTER  - %red% ^! %blue% & ECHO.
     ECHO   INCLUDING THIS CHARACTER IN FOLDER NAMES CAN BREAK THE FUNCTIONS IN THE PROGRAM. & ECHO   CHANGE FOLDER NAMES TO REMOVE THE EXCLAMATION MARK %red% ^! %blue% & ECHO: & ECHO: & ECHO:
     PAUSE & EXIT [/B]
     setlocal enabledelayedexpansion
+)
+
+:: Checks to see if folder path contains an apostrophe / singlequote character, which breaks the execution of some powershell commands
+IF "!HERE!" NEQ "!HERE:'=x!" (
+  CLS
+  ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO      %red% %cd% %blue% & ECHO. & ECHO      THE ABOVE FOLDER LOCATION CONTAINS AN APOSTROPHE / SINGLE QUOTE CHARACTER - %red% ' %blue% & ECHO:
+  ECHO      REMOVE THIS CHARACTER FROM THE FOLDER NAME / FOLDER PATH NAME & ECHO: & ECHO: & ECHO:
+  ECHO        ** THIS CHARACTER BREAKS THE FUNCTION OF SOME POWERSHELL COMMANDS & ECHO           WHICH THE SCRIPT USES, SO THEY ARE NOT ALLOWED
+  ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO:
+  PAUSE & EXIT [\B]
 )
 
 :: Checks to see if there are environmental variables trying to set global ram allocation values!  This is a real thing!
@@ -736,7 +746,7 @@ ECHO !MINECRAFT! | FINDSTR "[a-z] [A-Z]" && GOTO :startover
 SET "MCMINOR="
 FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO (
     SET /a MCMAJOR=%%E
-    SET /a MCMINOR=%%F
+    SET /a MCMINOR=%%F >nul 2>&1
 )
 IF NOT DEFINED MCMINOR SET /a MCMINOR=0
 
@@ -1153,7 +1163,7 @@ GOTO :redoenterforge
 
 IF NOT DEFINED MCMAJOR (
   SET "MCMINOR="
-  FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO SET /a MCMAJOR=%%E & SET /a MCMINOR=%%F
+  FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO SET /a MCMAJOR=%%E & SET /a MCMINOR=%%F >nul 2>&1
   IF NOT DEFINED MCMINOR SET /a MCMINOR=0
 )
 
@@ -1482,7 +1492,7 @@ SET "JAVANUM=!JAVANUM:-LTS=!"
 SET "MCMINOR="
 FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO (
     SET /a MCMAJOR=%%E
-    SET /a MCMINOR=%%F
+    SET /a MCMINOR=%%F >nul 2>&1
 )
 IF NOT DEFINED MCMINOR SET /a MCMINOR=0
 
@@ -2114,8 +2124,12 @@ GOTO :logsscan
 
 :: BEGIN FABRIC INSTALLATION SECTION
 :preparefabric
+
+IF !MCMINOR!==0 SET "FABRICMCNAME=1.!MCMAJOR!"
+IF !MCMINOR! NEQ 0 SET "FABRICMCNAME=!MINECRAFT!"
+
 :: Skips installation if already present, if either file is not present then assume a reinstallation is needed.
-IF EXIST fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar IF EXIST "libraries\net\fabricmc\fabric-loader\!FABRICLOADER!\fabric-loader-!FABRICLOADER!.jar" GOTO :launchfabric
+IF EXIST fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar IF EXIST "libraries\net\fabricmc\fabric-loader\!FABRICLOADER!\fabric-loader-!FABRICLOADER!.jar" GOTO :launchfabric
 
 :: Deletes existing core files and folders if this specific desired Fabric launch file not present.  This forces a fresh installation and prevents getting a mis-match of various minecraft and/or fabric version files conflicting.
 IF EXIST "%HERE%\.fabric" RD /s /q "%HERE%\.fabric\"
@@ -2174,7 +2188,7 @@ SET fabricinstallerhecksum=!FOUT[1]!
 :: IF yes then install fabric server files
 IF EXIST fabric-installer.jar (
     IF /I !INSTALLERVAL!==!fabricinstallerhecksum! (
-      "%JAVAFILE%" -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !MINECRAFT! -downloadMinecraft
+      "%JAVAFILE%" -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !FABRICMCNAME! -downloadMinecraft
     ) ELSE (
       DEL fabric-installer.jar
       ECHO:
@@ -2189,14 +2203,14 @@ IF EXIST fabric-installer.jar (
 IF EXIST fabric-installer.jar DEL fabric-installer.jar
 IF EXIST fabric-installer.jar.sha256 DEL fabric-installer.jar.sha256
 IF EXIST fabric-server-launch.jar (
-  RENAME fabric-server-launch.jar fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar
+  RENAME fabric-server-launch.jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar
 )
 
 :: Go to eula checking
 GOTO :eula
 :eulafabricreturn
 
-IF EXIST fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar (
+IF EXIST fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar (
   GOTO :launchfabric 
 ) ELSE (
   GOTO :preparefabric
@@ -2205,8 +2219,12 @@ IF EXIST fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar (
 
 :: BEGIN QUILT INSTALLATION SECTION
 :preparequilt
+
+IF !MCMINOR!==0 SET "QUILTMCNAME=1.!MCMAJOR!"
+IF !MCMINOR! NEQ 0 SET "QUILTMCNAME=!MINECRAFT!"
+
 :: Skips installation if already present
-IF EXIST quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar IF EXIST "libraries\org\quiltmc\quilt-loader\!QUILTLOADER!\quilt-loader-!QUILTLOADER!.jar" GOTO :launchquilt
+IF EXIST quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar IF EXIST "libraries\org\quiltmc\quilt-loader\!QUILTLOADER!\quilt-loader-!QUILTLOADER!.jar" GOTO :launchquilt
 
 :: Deletes existing core files and folders if this specific desired Fabric launch file not present.  This forces a fresh installation and prevents getting a mis-match of various minecraft and/or fabric version files conflicting.
 IF EXIST "%HERE%\.fabric" RD /s /q "%HERE%\.fabric\"
@@ -2273,7 +2291,7 @@ IF "%HERE%" NEQ "%HERE: =%" (
 )
 IF EXIST quilt-installer.jar (
     IF /I !INSTALLERVAL!==!quiltinstallerhecksum! (
-      "%JAVAFILE%" -XX:+UseG1GC -jar quilt-installer.jar install server !MINECRAFT! !QUILTLOADER! --download-server --install-dir=%cd%
+      "%JAVAFILE%" -XX:+UseG1GC -jar quilt-installer.jar install server !QUILTMCNAME! !QUILTLOADER! --download-server --install-dir=%cd%
     ) ELSE (
       DEL quilt-installer.jar
       ECHO:
@@ -2289,14 +2307,14 @@ IF EXIST quilt-installer.jar (
 IF EXIST quilt-installer.jar DEL quilt-installer.jar
 IF EXIST quilt-installer.jar.sha256 DEL quilt-installer.jar.sha256
 IF EXIST quilt-server-launch.jar (
-  RENAME quilt-server-launch.jar quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar
+  RENAME quilt-server-launch.jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar
 )
 
 :: Go to eula checking
 GOTO :eula
 :eulaquiltreturn
 
-IF EXIST quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar GOTO :launchquilt
+IF EXIST quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar GOTO :launchquilt
 GOTO :preparequilt
 
 :: END QUILT INSTALLATION SECTION
@@ -2542,7 +2560,7 @@ ECHO   Minecraft server JAR not found - attempting to download from Mojang serve
 
 :: As of May 17th 2024 it seems like Mojang may have ICMP blocked pinging the mojang server locations, so ping checks are currently disabled.
 :: Tries to ping the Mojang file server to check that it is online and responding
-:: ET /a pingmojang=1
+:: SET /a pingmojang=1
 :: :pingmojangagain
 
 :: ECHO   Pinging Mojang file server - Attempt # !pingmojang! ... & ECHO:
@@ -2679,10 +2697,10 @@ TITLE Universalator - !MINECRAFT! !MODLOADER!
 
 :: Actually launch the server!
 IF /I !MODLOADER!==FABRIC (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui
 )
 IF /I !MODLOADER!==QUILT (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui
 )
 IF /I !MODLOADER!==VANILLA (
 "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar minecraft_server.!MINECRAFT!.jar nogui
