@@ -2082,7 +2082,7 @@ IF !MINECRAFT!==1.8.9 (
 "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.8.9-!FORGE!-1.8.9-universal.jar nogui
 ) 
 IF !MINECRAFT!==1.9.4 (
-"%JAVAFILE%"" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.9.4-!FORGE!-1.9.4-universal.jar nogui
+"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.9.4-!FORGE!-1.9.4-universal.jar nogui
 ) 
 IF !MINECRAFT!==1.10.2 (
 "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.10.2-!FORGE!-universal.jar nogui
@@ -2101,7 +2101,7 @@ IF !LAUNCHFORGE!==NEWOLD (
   "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
 )
 IF !LAUNCHFORGE!==NEWNEW (
-  "%JAVAFILE%"" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
+  "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
 )
 
 :actuallylaunchneoforge
@@ -2117,6 +2117,9 @@ IF DEFINED RESTART IF !RESTART!==Y IF EXIST "logs\latest.log" FINDSTR /I "Stoppi
   GOTO :launchneoforge
 )
 
+:: Resets the background color to blue if modloader had set it to other
+color 1E
+CLS
 :: Go to common scan logs section
 GOTO :logsscan
 
