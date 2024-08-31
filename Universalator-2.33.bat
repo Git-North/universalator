@@ -1797,6 +1797,11 @@ IF !MCMAJOR! LEQ 12 GOTO :scanmcmodinfo
 
 :: BEGIN SCANNING NEW STYLE (MC >1.12.2) mods.toml FILES IN MODS
 
+:: Set a variable for which name the mod ID file should be to read.  Neoforge 1.20.4 and older still used mods.toml
+IF /I !MODLOADER!==FORGE SET "MODIDFILENAME=mods.toml"
+IF /I !MODLOADER!==NEOFORGE SET "MODIDFILENAME=neoforge.mods.toml"
+IF /I !MODLOADER!==NEOFORGE IF !MCMAJOR!==20 IF !MCMINOR! LEQ 4 SET "MODIDFILENAME=mods.toml"
+
 :: For each found jar file - uses tar command to output using STDOUT the contents of the mods.toml.  For each line in the STDOUT output the line is checked.
 :: First a trigger is needed to determine if the [mods] section has been detected yet in the JSON.  Once that trigger variable has been set to Y then 
 :: the script scans to find the modID line.  A fancy function replaces the = sign with _ for easier string comparison to determine if the modID= line was found.
@@ -1810,10 +1815,11 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
    SET MODID[0]=x
    SET FOUNDMODPLACE=N
 
-   REM Sends the mods.toml to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
-   tar -xOf "mods\!SERVERMODS[%%T].file!" *\mods.toml >nul 2>&1
+   REM Sends the mod ID file to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
+   REM This is for the purpose of confirming that there is actually an ID file inside to be read by setting an errorlevel
+   tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME! >nul 2>&1
 
-   IF !ERRORLEVEL!==0 FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%T].file!" *\mods.toml') DO (
+   IF !ERRORLEVEL!==0 FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME!') DO (
     
       SET "TEMP=%%X"
       IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId=x!" (
@@ -1831,6 +1837,9 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
       )
       :: Detects if the current line has the [mods] string.  If it does then record to a varaible which will trigger checking for the string modId_ to detect the real modId of this mod file.
       IF "!TEMP!" NEQ "!TEMP:[mods]=x!" SET FOUNDMODPLACE=Y
+
+      :: Detects if the mod file has a value marking the mod as client side or not, this was added to Forge ID files at some point.
+      IF /I "!TEMP!" NEQ "!TEMP:clientSideOnly=x!" IF /I "!TEMP!" NEQ "!TEMP:true=x!" SET SERVERMODS[%%T].clientmarked=Y
    )
    SET SERVERMODS[%%T].id=!MODID[0]!
 )
@@ -1849,7 +1858,7 @@ set "TEMP=%%x%~3%%y"
 GOTO :l_replaceloop
 :skipreplacefunction
 
-:: END SCANNING NEW STYLE MODS.TOML
+:: END SCANNING NEW STYLE MODS.TOML / NEOFORGE.MODS.TOML
 :: BEGIN SCANNING OLD STYLE MCMOD.INFO
 
 :scanmcmodinfo
@@ -1890,23 +1899,31 @@ FOR /L %%t IN (0,1,!SERVERMODSCOUNT!) DO (
 :: END SCANNING OLD STYLE MCMOD.INFO
 :finishedscan
 
-
 :: This is it! Checking each server modid versus the client only mods list text file.  Starts with a loop through each server modID found.
 SET /a NUMCLIENTS=0
 FOR /L %%b IN (0,1,!SERVERMODSCOUNT!) DO (
 
-  :: Runs a FINDSTR to see if the string of the modID is found on a line.  This needs further checks to guarantee the modID is the entire line and not just part of it.
-  FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt >nul
-  
-  REM If errorlevel is 0 then the FINDSTR above found the modID.  The line returned by the FINDSTR can be captured into a variable by using a FOR loop.
-  REM That variable is compared to the server modID in question.  If they are equal then it is a definite match and the modID and filename are recorded to a list of client only mods found.
-  IF !ERRORLEVEL!==0 (
-    FOR /F "delims=" %%A IN ('FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt') DO (
+  REM IF - Looks to see if the mods ID file was labeled by the author as clientSideOnly=true
+  REM ELSE - run detection of client mods based on the Universalator curated client mods list.
 
-      IF /I !SERVERMODS[%%b].id!==%%A (
-        SET /a NUMCLIENTS+=1
-        SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
-        SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+  IF !SERVERMODS[%%b].clientmarked!==Y (
+    SET /a NUMCLIENTS+=1
+    SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
+    SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+  ) ELSE (
+    :: Runs a FINDSTR to see if the string of the modID is found on a line.  This needs further checks to guarantee the modID is the entire line and not just part of it.
+    FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt >nul
+  
+    REM If errorlevel is 0 then the FINDSTR above found the modID.  The line returned by the FINDSTR can be captured into a variable by using a FOR loop.
+    REM That variable is compared to the server modID in question.  If they are equal then it is a definite match and the modID and filename are recorded to a list of client only mods found.
+    IF !ERRORLEVEL!==0 (
+      FOR /F "delims=" %%A IN ('FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt') DO (
+
+        IF /I !SERVERMODS[%%b].id!==%%A (
+          SET /a NUMCLIENTS+=1
+          SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
+          SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+        )
       )
     )
   )
@@ -2117,9 +2134,6 @@ IF DEFINED RESTART IF !RESTART!==Y IF EXIST "logs\latest.log" FINDSTR /I "Stoppi
   GOTO :launchneoforge
 )
 
-:: Resets the background color to blue if modloader had set it to other
-color 1E
-CLS
 :: Go to common scan logs section
 GOTO :logsscan
 
@@ -3248,6 +3262,11 @@ ECHO: & ECHO   IF THIS MESSAGE IS VISIBLE SERVER MAY HAVE CRASHED / STOPPED & EC
 
 :skiplogchecking
 PAUSE
+
+:: Resets the background color to blue if modloader had set it to other
+color 1E
+CLS
+
 GOTO :mainmenu
 
 :: END LOGS SCANNING SECTION
