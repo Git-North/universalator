@@ -155,15 +155,20 @@ IF "!HERE!" NEQ "!HERE:'=x!" (
 )
 
 :: Checks to see if there are environmental variables trying to set global ram allocation values!  This is a real thing!
-:: Check for _JAVA_OPTIONS
-IF NOT DEFINED _JAVA_OPTIONS GOTO :skipjavopts
-IF DEFINED _JAVA_OPTIONS (
-  ECHO %_JAVA_OPTIONS% | FINDSTR /i "xmx xmn" 1>NUL
-)
-  IF %ERRORLEVEL%==0 (
+
+FOR %%X IN (_JAVA_OPTIONS JDK_JAVA_OPTIONS JAVA_TOOL_OPTIONS) DO (
+  REM Doing this with ver and silencing the output always resets the current errorlevel to 0
+  ver >nul
+
+  REM If the environment variable in this loop exists then search if it has an xmx or xmn term, and if it does report it to the user.
+  IF DEFINED %%X (
+    ECHO %%X | FINDSTR /i "xmx xmn" 1>NUL
+
+    REM If errorlevel is 0 then the findstr succeeded and it found xmx or xmn in the environment variable being searched.
+    IF !ERRORLEVEL!==0 (
     ECHO:
     ECHO  %yellow% WARNING - IT WAS DETECTED THAT YOU HAVE THE WINDOWS ENVIRONMENTAL VARIABLE %blue%
-    ECHO  %yellow% NAMED %blue% _JAVA_OPTIONS %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
+    ECHO  %yellow% NAMED %blue% %%X %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
     ECHO:
     ECHO  %yellow% PLEASE REMOVE THIS VALUE FROM THE VARIABLE SO THAT YOUR SERVER WILL LAUNCH CORRECTLY! %blue%
     ECHO:
@@ -171,47 +176,10 @@ IF DEFINED _JAVA_OPTIONS (
     ECHO  https://github.com/nanonestor/universalator/wiki
     ECHO:
     PAUSE & EXIT [\B]
+    )
   )
-:skipjavopts
 
-: Check for JDK_JAVA_OPTIONS
-IF NOT DEFINED JDK_JAVA_OPTIONS GOTO :skipjdkjavaoptions
-IF DEFINED JDK_JAVA_OPTIONS (
-  ECHO %JDK_JAVA_OPTIONS% | FINDSTR /i "xmx xmn" 1>NUL
 )
-  IF %ERRORLEVEL%==0 (
-    ECHO:
-    ECHO  %yellow% WARNING - IT WAS DETECTED THAT YOU HAVE THE WINDOWS ENVIRONMENTAL VARIABLE %blue%
-    ECHO  %yellow% NAMED %blue% JDK_JAVA_OPTIONS %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
-    ECHO:
-    ECHO  %yellow% PLEASE REMOVE THIS VALUE FROM THE VARIABLE SO THAT YOUR SERVER WILL LAUNCH CORRECTLY! %blue%
-    ECHO:
-    ECHO  IF YOU DON'T KNOW HOW - SEE THE UNIVERSALATOR WIKI / TROUBLESHOOTING AT:
-    ECHO  https://github.com/nanonestor/universalator/wiki
-    ECHO:
-    PAUSE & EXIT [\B]
-  )
-:skipjdkjavaoptions
-
-:: Check for JAVA_TOOL_OPTIONS
-IF NOT DEFINED JAVA_TOOL_OPTIONS GOTO :skipjavatooloptions
-IF DEFINED JAVA_TOOL_OPTIONS (
-  ECHO %JAVA_TOOL_OPTIONS% | FINDSTR /i "xmx xmn" 1>NUL
-)
-  IF %ERRORLEVEL%==0 (
-    ECHO:
-    ECHO  %yellow% WARNING - IT WAS DETECTED THAT YOU HAVE THE WINDOWS ENVIRONMENTAL VARIABLE %blue%
-    ECHO  %yellow% NAMED %blue% JAVA_TOOL_OPTIONS %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
-    ECHO:
-    ECHO  %yellow% PLEASE REMOVE THIS VALUE FROM THE VARIABLE SO THAT YOUR SERVER WILL LAUNCH CORRECTLY! %blue%
-    ECHO:
-    ECHO  IF YOU DON'T KNOW HOW - SEE THE UNIVERSALATOR WIKI / TROUBLESHOOTING AT:
-    ECHO  https://github.com/nanonestor/universalator/wiki
-    ECHO:
-    PAUSE & EXIT [\B]
-  )
-:skipjavatooloptions
-
 
 :: The below SET PATH only applies to this command window launch and isn't permanent to the system's PATH.
 :: It's only done if the tests fail to find the entries in the 'System PATH' environment variable, which they should be as default in Windows.
@@ -223,12 +191,9 @@ ECHO %PATH% | FINDSTR /L /C:C\:\Windows\SysWOW64\; >nul 2>&1 || SET "PATH=%PATH%
 ECHO %PATH% | FINDSTR /L /C:C\:\Windows\System32\WindowsPowerShell\v1.0\\; >nul 2>&1 || SET "PATH=%PATH%C:\Windows\System32\WindowsPowerShell\v1.0\;"
 
 :: Checks to see if CMD is working by checking WHERE for some commands - if the WHERE fails then a variable is set.
-WHERE FINDSTR >nul 2>&1 || SET CMDBROKEN=Y
-WHERE CERTUTIL >nul 2>&1 || SET CMDBROKEN=Y
-WHERE NETSTAT >nul 2>&1 || SET CMDBROKEN=Y
-WHERE PING >nul 2>&1 || SET CMDBROKEN=Y
-WHERE CURL >nul 2>&1 || SET CMDBROKEN=Y
-WHERE TAR >nul 2>&1 || SET CMDBROKEN=Y
+FOR %%X IN (FINDSTR CERTUTIL NETSTAT PING CURL TAR) DO (
+  WHERE %%X >nul 2>&1 || SET CMDBROKEN=Y
+)
 
 IF DEFINED CMDBROKEN IF !CMDBROKEN!==Y (
   ECHO:
@@ -265,6 +230,7 @@ WHERE powershell >nul 2>&1 || (
   PAUSE & EXIT [\B]
 )
 
+:: Checks to see if somehow the installed TAR command being used is the version that does not include zip and standard output functions.
 FOR /F "usebackq delims=" %%J IN (`"tar --version 2>&1"`) DO (
   ECHO %%J | FINDSTR /ic:"GNU tar" >nul && (
   ECHO: & ECHO:
@@ -1508,11 +1474,19 @@ IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 IF EXIST libraries/net/neofor
 IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 IF EXIST libraries/net/neoforged/neoforge/!NEOFORGE!/. GOTO :foundforge
 
 IF /I !MODLOADER!==FORGE (
-  IF EXIST libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/. GOTO :foundforge
-  IF EXIST forge-!MINECRAFT!-!FORGE!.jar GOTO :foundforge
-  IF EXIST minecraftforge-universal-!MINECRAFT!-!FORGE!.jar GOTO :foundforge
-  IF EXIST forge-!MINECRAFT!-!FORGE!-!MINECRAFT!-universal.jar GOTO :foundforge
-  IF EXIST forge-!MINECRAFT!-!FORGE!-universal.jar GOTO :foundforge
+  REM Sets variables for different file names that different versions of Forge have.
+  SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
+  IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 9 SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!-!MINECRAFT!"
+ 
+  REM Checks if installation of Forge is detected, different configurations depend on version.  Very old versions just checks for JAR file, old versions both the JAR file and libraries folder, newer style just the libraries folder.
+  SET FOUNDFORGEINST=N
+
+  IF !MCMAJOR! LEQ 6 IF EXIST "minecraftforge-universal-!FORGEFILENAMEORDER!.jar" SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 10 IF EXIST "forge-!FORGEFILENAMEORDER!-universal.jar" SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 11 IF !MCMAJOR! LEQ 16 IF EXIST "forge-!FORGEFILENAMEORDER!.jar" IF EXIST "libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\." SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 17 IF EXIST "libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\." SET FOUNDFORGEINST=Y
+
+  IF !FOUNDFORGEINST!==Y GOTO :foundforge
 )
 
 :: At this point assume the JAR file or libaries folder does not exist and installation is needed.
@@ -1554,13 +1528,6 @@ IF %ERRORLEVEL% NEQ 0 (
 
 :: Skips ahead if Neoforge instead of Forge
 IF /I !MODLOADER!==NEOFORGE GOTO :downloadneoforge
-
-:: Sets variables for different file names that different versions of Forge have.
-IF !MINECRAFT!==1.6.4 IF NOT EXIST minecraftforge-universal-1.6.4-!FORGE!.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
-IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 9 IF NOT EXIST forge-!MINECRAFT!-!FORGE!-!MINECRAFT!-universal.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!-!MINECRAFT!"
-IF !MCMAJOR!==10 IF NOT EXIST forge-!MINECRAFT!-!FORGE!-universal.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
-IF !MCMAJOR! GEQ 11 IF !MCMAJOR! LEQ 16 IF NOT EXIST forge-!MINECRAFT!-!FORGE!.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
-IF !MCMAJOR! GEQ 17 IF NOT EXIST libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\. SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
 
 :: Forge detect if specific version folder is present - if not delete all JAR files and 'install' folder to guarantee no files of different versions conflicting on later install.  Then downloads installer file.
 IF /I !MODLOADER!==FORGE (
@@ -1773,7 +1740,7 @@ IF EXIST univ-utils\allmodidsandfiles.txt DEL univ-utils\allmodidsandfiles.txt
 
   REM Checks to see if clientonlymods.txt exists, if it does check the age and delete to refresh if older than 1 day.  Then downloads file if it does not exist.
   IF EXIST "univ-utils\clientonlymods.txt" (
-    FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddDays(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
+    FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddHours(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
   )
   IF NOT EXIST "univ-utils\clientonlymods.txt" powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/nanonestor/utilities/main/clientonlymods.txt', 'univ-utils/clientonlymods.txt')" >nul
 
@@ -1842,6 +1809,12 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
       IF /I "!TEMP!" NEQ "!TEMP:clientSideOnly=x!" IF /I "!TEMP!" NEQ "!TEMP:true=x!" SET SERVERMODS[%%T].clientmarked=Y
    )
    SET SERVERMODS[%%T].id=!MODID[0]!
+
+   :: Resets the errorlevel
+   ver >nul
+   :: Checks to see if the mod is the 'Essential Mod' - which is a jarmod with no regular ID file, so it will never be picked up by the client scan method.
+   tar -xOf "mods\!SERVERMODS[%%T].file!" *\essential-loader.properties >nul 2>&1
+   IF !ERRORLEVEL!==0 del "mods\!SERVERMODS[%%T].file!" >nul 2>&1
 )
 :: Below skips to finishedscan label skipping the next section which is file scanning for old MC versions (1.12.2 and older).
 IF !MCMAJOR! GEQ 13 GOTO :finishedscan
@@ -2118,7 +2091,8 @@ IF !LAUNCHFORGE!==NEWOLD (
   "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
 )
 IF !LAUNCHFORGE!==NEWNEW (
-  "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
+  REM "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
+  "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
 )
 
 :actuallylaunchneoforge
