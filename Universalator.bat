@@ -26,7 +26,7 @@ REM    GNU General Public License for more details.
 REM
 REM    You should have received a copy of the GNU General Public License
 REM    along with this program.  If not, see https://www.gnu.org/licenses/.
-
+REM forked and slightly tweaked by N__RTH :)
 
 
 
