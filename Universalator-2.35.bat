@@ -515,10 +515,12 @@ ver > nul
 
 :: BEGIN PUBLIC IP DETECTION
 
-:: Obtains the computer's public IP address by poking a website API service which specifically exists for this purpose - api.bigdatacloud.net is now used, it seems reliably fasteer than the older api.ipify.org used
-FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('https://api.bigdatacloud.net/data/client-ip') | Out-String | ConvertFrom-Json); $data.ipString"') DO SET PUBLICIP=%%B
-:: If trying api.bigdatacloud.net failed to get the public IP then try this different web service at ip-api.com
-IF NOT DEFINED PUBLICIP FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('http://ip-api.com/json/?fields=query') | Out-String | ConvertFrom-Json); $data.query"') DO SET PUBLICIP=%%B
+:: Obtains the computer's public IP address by poking a website API service which specifically exists for this purpose - api.bigdatacloud.net stopped sending ipv4 publicly and now sends only ipv6, so primary is ip-api.com now.
+FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('http://ip-api.com/json/?fields=query') | Out-String | ConvertFrom-Json); $data.query"') DO SET PUBLICIP=%%B
+:: If trying api-api.com failed to get the public IP then try this different web service at ip-api.com
+IF NOT DEFINED PUBLICIP FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('https://api.ipify.org?format=json') | Out-String | ConvertFrom-Json); $data.ip"') DO SET PUBLICIP=%%B
+
+IF NOT DEFINED PUBLICIP SET "PUBLICIP=NOT DETECTED"
 
 :: BEGIN LOCAL IPV4 ADDRESS DETECTION
 
