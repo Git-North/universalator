@@ -1500,8 +1500,9 @@ IF /I !MODLOADER!==FORGE (
   SET FOUNDFORGEINST=N
 
   IF !MCMAJOR! LEQ 6 IF EXIST "minecraftforge-universal-!FORGEFILENAMEORDER!.jar" SET FOUNDFORGEINST=Y
-  IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 10 IF EXIST "forge-!FORGEFILENAMEORDER!-universal.jar" SET FOUNDFORGEINST=Y
-  IF !MCMAJOR! GEQ 11 IF !MCMAJOR! LEQ 16 IF EXIST "forge-!FORGEFILENAMEORDER!.jar" IF EXIST "libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\." SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 12 IF EXIST "forge-!FORGEFILENAMEORDER!-universal.jar" SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 11 IF !MCMAJOR! LEQ 12 IF EXIST "forge-!FORGEFILENAMEORDER!.jar" SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 13 IF !MCMAJOR! LEQ 16 IF EXIST "forge-!FORGEFILENAMEORDER!.jar" IF EXIST "libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\." SET FOUNDFORGEINST=Y
   IF !MCMAJOR! GEQ 17 IF EXIST "libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\." SET FOUNDFORGEINST=Y
 
   IF !FOUNDFORGEINST!==Y GOTO :foundforge
@@ -2079,27 +2080,23 @@ IF !OVERRIDE!==Y SET "JAVAFILE=java"
 TITLE Universalator - !MINECRAFT! !MODLOADER!
 ver >nul
 IF /I !MODLOADER!==NEOFORGE GOTO :actuallylaunchneoforge
-:: Special case forge.jar filenames for older OLD versions
-IF !MINECRAFT!==1.6.4 (
-"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar minecraftforge-universal-1.6.4-!FORGE!.jar nogui
-) 
-IF !MINECRAFT!==1.7.10 (
-"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.7.10-!FORGE!-1.7.10-universal.jar nogui
-) 
-IF !MINECRAFT!==1.8.9 (
-"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.8.9-!FORGE!-1.8.9-universal.jar nogui
-) 
-IF !MINECRAFT!==1.9.4 (
-"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.9.4-!FORGE!-1.9.4-universal.jar nogui
-) 
-IF !MINECRAFT!==1.10.2 (
-"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.10.2-!FORGE!-universal.jar nogui
-) 
 
-:: General case forge.jar filenames for regular OLD Minecraft Forge newer (higher numbered) than 1.10.2 but older than 1.17
-IF !MCMAJOR! LEQ 16 IF !MINECRAFT! NEQ 1.6.4 IF !MINECRAFT! NEQ 1.7.10 IF !MINECRAFT! NEQ 1.8.9 IF !MINECRAFT! NEQ 1.9.4 IF !MINECRAFT! NEQ 1.10.2 (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!.jar nogui
-) 
+:: Launching Forge for MC 1.16 and older.  Each IF EXIST tries to find the launch JAR using the various naming schemes that Forge has used over time.
+IF !MCMAJOR! LEQ 16 (
+  SET "FORGEFILE="
+  IF EXIST "minecraftforge-universal-!MINECRAFT!-!FORGE!.jar" SET "FORGEFILE=minecraftforge-universal-!MINECRAFT!-!FORGE!.jar"
+  IF EXIST "forge-!MINECRAFT!-!FORGE!-!MINECRAFT!-universal.jar" SET "FORGEFILE=forge-!MINECRAFT!-!FORGE!-!MINECRAFT!-universal.jar"
+  If EXIST "forge-!MINECRAFT!-!FORGE!-universal.jar" SET "FORGEFILE=forge-!MINECRAFT!-!FORGE!-universal.jar"
+  IF EXIST "forge-!MINECRAFT!-!FORGE!.jar" SET "FORGEFILE=forge-!MINECRAFT!-!FORGE!.jar"
+
+  IF NOT DEFINED FORGEFILE (
+    ECHO: & ECHO   %yellow% A FORGE LAUNCH JAR FILE WAS NOT FOUND BY THE SCRIPT %blue% & ECHO:
+    PAUSE
+  )
+
+  "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar !FORGEFILE! nogui
+)
+ 
 :: Launching Minecraft versions 1.17 and newer.  As of 1.20.4 Forge went back to an executable JAR file that gets put in the main directory.
 IF !MCMAJOR! GEQ 17 SET LAUNCHFORGE=NEWOLD
 IF !MCMAJOR! EQU 20 IF !MCMINOR! GEQ 4 SET LAUNCHFORGE=NEWNEW
@@ -3229,17 +3226,24 @@ TYPE "%HERE%\logs\latest.log" | FINDSTR /I /C:"Unsupported class file major vers
   ECHO    %yellow% --AT LEAST ONE MOD FILE IN THE MODS FOLDER IS MEANT FOR A DIFFERENT VERSION OF FORGE / MINECRAFT %blue% & ECHO:
   ECHO        %red% --SPECIAL NOTE-- %blue% & ECHO:
 )
+
   :: Search if the standard client side mod message was found.
-TYPE "%HERE%\logs\latest.log" | FINDSTR /I /C:"invalid dist DEDICATED_SERVER" >nul && (
-  ECHO: & ECHO        %red% --- SPECIAL NOTE --- %blue%
-  ECHO    THE TEXT 'invalid dist DEDICATED_SERVER' WAS FOUND IN THE LOG FILE
-  ECHO    This could mean you have CLIENT SIDE mods crashing the server.
-  ECHO       %yellow% OR  OR  OR  OR  OR %blue%
-  ECHO    The authors of some of mod files did not silence that message and they are not the crash cause.
-  ECHO:
-  ECHO   %yellow% TRY USING THE UNIVERSALATOR %green% 'SCAN' %yellow% OPTION TO FIND CLIENT MODS. %blue%
-  ECHO        %red% --- SPECIAL MESSAGE --- %blue% & ECHO:
+FOR %%T IN ("invalid dist DEDICATED_SERVER" "Attempting to load a clientside only mod") DO (
+  TYPE "%HERE%\logs\latest.log" | FINDSTR /I /C:%%T >nul && (
+    ECHO: & ECHO        %red% --- SPECIAL NOTE --- %blue%
+    ECHO    THE TEXT %%T WAS FOUND IN THE LOG FILE
+    ECHO    This could %yellow% MAYBE %blue% mean you have CLIENT SIDE mods crashing the server. & ECHO:
+    ECHO   %yellow% TRY USING THE UNIVERSALATOR %green% 'SCAN' %yellow% OPTION TO FIND CLIENT MODS. %blue% & ECHO:
+    ECHO   There are a lot of other reasons which could be causing the server to crash.
+    ECHO   If you have already done a client mod SCAN, look through the logs carefully to try to find whether the issue
+    ECHO   really are client side mods, or another issue.
+    ECHO: & ECHO        %red% --- SPECIAL MESSAGE --- %blue% & ECHO:
+    GOTO :outofclientmessage
+  )
 )
+:outofclientmessage
+
+
   :: Search if the standard client side mod message was found.
 TYPE "%HERE%\logs\latest.log" | FINDSTR /I /C:"FAILED TO BIND TO PORT" >nul && (
   ECHO: & ECHO        %red% --- SPECIAL NOTE --- %blue%
