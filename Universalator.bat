@@ -423,29 +423,29 @@ IF DEFINED IPLINE IF !IS_IP_ENTERED!==Y (
 IF DEFINED IPLINE IF !IS_IP_ENTERED!==Y (
     IF /I !CHOOSE_IP! NEQ CORRECT IF /I !CHOOSE_IP! NEQ IGNORE GOTO :confirmip
 )
-:: If an IP address was entered and user choses to remove then print server.properties with it made blank, also always set allow-flight to be true
-IF DEFINED IPLINE IF /I !CHOOSE_IP!==CORRECT (
-    FOR /L %%T IN (0,1,!idx!) DO (
-        IF %%T NEQ %IPLINE% IF "!serverprops[%%T]!" NEQ "" IF "!serverprops[%%T]!" NEQ "allow-flight=false" IF "!serverprops[%%T]!" NEQ "online-mode=false" ECHO !serverprops[%%T]!>>server.properties2
-        IF "!serverprops[%%T]!"=="allow-flight=false" ECHO allow-flight=true>>server.properties2
-        IF "!serverprops[%%T]!"=="online-mode=false" ECHO online-mode=true>>server.properties2
-        IF %%T==%IPLINE% ECHO server-ip=>>server.properties2
+:: :: If an IP address was entered and user choses to remove then print server.properties with it made blank, also always set allow-flight to be true
+:: IF DEFINED IPLINE IF /I !CHOOSE_IP!==CORRECT (
+ ::   FOR /L %%T IN (0,1,!idx!) DO (
+ ::       IF %%T NEQ %IPLINE% IF "!serverprops[%%T]!" NEQ "" IF "!serverprops[%%T]!">>server.properties2
+   ::     IF "!serverprops[%%T]!"=="allow-flight=false" ECHO allow-flight=true>>server.properties2
+     ::   IF "!serverprops[%%T]!"=="online-mode=false" ECHO online-mode=true>>server.properties2
+       :: IF %%T==%IPLINE% ECHO server-ip=>>server.properties2
     )
-    DEL server.properties
-    RENAME server.properties2 server.properties
+    :: DEL server.properties
+    :: RENAME server.properties2 server.properties
     :: Skips past the last section since the job is done for this case.
     GOTO :skipserverproperties
 )
 :: At this point if IPLINE is defined and user chooses Y then scipt has skipped ahead, also skipped ahead if server.properties does not previously exist.
 :: This means that all that's left are cases where IPLINE is not defined or user has chosen IGNORE.
 :: Below reprints all lines except always setting allow-flight=true
-    FOR /L %%T IN (0,1,!idx!) DO (
-        IF "!serverprops[%%T]!" NEQ "" IF "!serverprops[%%T]!" NEQ "allow-flight=false" IF "!serverprops[%%T]!" NEQ "online-mode=false" ECHO !serverprops[%%T]!>>server.properties2
-        IF "!serverprops[%%T]!"=="allow-flight=false" ECHO allow-flight=true>>server.properties2
-        IF "!serverprops[%%T]!"=="online-mode=false" ECHO online-mode=true>>server.properties2
+  ::  FOR /L %%T IN (0,1,!idx!) DO (
+    ::    IF "!serverprops[%%T]!" NEQ "" IF "!serverprops[%%T]!" NEQ "allow-flight=false" IF "!serverprops[%%T]!" NEQ "online-mode=false" ECHO !serverprops[%%T]!>>server.properties2
+      ::  IF "!serverprops[%%T]!"=="allow-flight=false" ECHO allow-flight=true>>server.properties2
+        ::IF "!serverprops[%%T]!"=="online-mode=false" ECHO online-mode=true>>server.properties2
     )
-    DEL server.properties
-    RENAME server.properties2 server.properties
+  ::  DEL server.properties
+  ::  RENAME server.properties2 server.properties
 
 :skipserverproperties
 :: END CHECKING server.properties FILE FOR IP ENTRY AND OTHER
