@@ -138,7 +138,7 @@ IF NOT EXIST "%HERE%\univ-utils\license.txt" WHERE powershell >nul && MD univ-ut
 SET "LASTCHAR=%cd:~-1%"
 ECHO ^%LASTCHAR% | FINDSTR "[a-z] [A-Z] [0-9]" >nul || (
   CLS
-  ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO      %red% "%cd%" %blue% & ECHO. & ECHO      THE ABOVE FOLDER LOCATION ENDS IN A SPECIAL CHARACTER - %red% ^!LASTCHAR! %blue% & ECHO:
+  ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO      %red% %cd% %blue% & ECHO. & ECHO      THE ABOVE FOLDER LOCATION ENDS IN A SPECIAL CHARACTER - %red% ^!LASTCHAR! %blue% & ECHO:
   ECHO      REMOVE THIS SPECIAL CHARACTER FROM THE END OF OF THE FOLDER NAME OR USE A DIFFERENT FOLDER & ECHO: & ECHO: & ECHO:
   ECHO        ** SPECIAL CHARACTERS AT THE END OF FOLDER NAMES BREAKS CERTAIN COMMAND FUNCTIONS THE SCRIPT USES
   ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO:
@@ -149,22 +149,37 @@ ECHO ^%LASTCHAR% | FINDSTR "[a-z] [A-Z] [0-9]" >nul || (
 FOR /F "delims=" %%A IN ('powershell -Command "ECHO (get-location).path | FINDSTR "^^!""') DO SET ISEXCLFOUND=%%A
 IF DEFINED ISEXCLFOUND IF "%CD%"=="!ISEXCLFOUND!" (
     setlocal disabledelayedexpansion
-    ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO   %red% "%cd%" %blue% & ECHO. & ECHO   THE ABOVE FOLDER PATH CONTAINS AN EXCLAMATION MARK CHARACTER  - %red% ^! %blue% & ECHO.
+    ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO   %red% %cd% %blue% & ECHO. & ECHO   THE ABOVE FOLDER PATH CONTAINS AN EXCLAMATION MARK CHARACTER  - %red% ^! %blue% & ECHO.
     ECHO   INCLUDING THIS CHARACTER IN FOLDER NAMES CAN BREAK THE FUNCTIONS IN THE PROGRAM. & ECHO   CHANGE FOLDER NAMES TO REMOVE THE EXCLAMATION MARK %red% ^! %blue% & ECHO: & ECHO: & ECHO:
     PAUSE & EXIT [/B]
     setlocal enabledelayedexpansion
 )
 
+:: Checks to see if folder path contains an apostrophe / singlequote character, which breaks the execution of some powershell commands
+IF "!HERE!" NEQ "!HERE:'=x!" (
+  CLS
+  ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO      %red% %cd% %blue% & ECHO. & ECHO      THE ABOVE FOLDER LOCATION CONTAINS AN APOSTROPHE / SINGLE QUOTE CHARACTER - %red% ' %blue% & ECHO:
+  ECHO      REMOVE THIS CHARACTER FROM THE FOLDER NAME / FOLDER PATH NAME & ECHO: & ECHO: & ECHO:
+  ECHO        ** THIS CHARACTER BREAKS THE FUNCTION OF SOME POWERSHELL COMMANDS & ECHO           WHICH THE SCRIPT USES, SO THEY ARE NOT ALLOWED
+  ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO:
+  PAUSE & EXIT [\B]
+)
+
 :: Checks to see if there are environmental variables trying to set global ram allocation values!  This is a real thing!
-:: Check for _JAVA_OPTIONS
-IF NOT DEFINED _JAVA_OPTIONS GOTO :skipjavopts
-IF DEFINED _JAVA_OPTIONS (
-  ECHO %_JAVA_OPTIONS% | FINDSTR /i "xmx xmn" 1>NUL
-)
-  IF %ERRORLEVEL%==0 (
+
+FOR %%X IN (_JAVA_OPTIONS JDK_JAVA_OPTIONS JAVA_TOOL_OPTIONS) DO (
+  REM Doing this with ver and silencing the output always resets the current errorlevel to 0
+  ver >nul
+
+  REM If the environment variable in this loop exists then search if it has an xmx or xmn term, and if it does report it to the user.
+  IF DEFINED %%X (
+    ECHO %%X | FINDSTR /i "xmx xmn" 1>NUL
+
+    REM If errorlevel is 0 then the findstr succeeded and it found xmx or xmn in the environment variable being searched.
+    IF !ERRORLEVEL!==0 (
     ECHO:
     ECHO  %yellow% WARNING - IT WAS DETECTED THAT YOU HAVE THE WINDOWS ENVIRONMENTAL VARIABLE %blue%
-    ECHO  %yellow% NAMED %blue% _JAVA_OPTIONS %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
+    ECHO  %yellow% NAMED %blue% %%X %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
     ECHO:
     ECHO  %yellow% PLEASE REMOVE THIS VALUE FROM THE VARIABLE SO THAT YOUR SERVER WILL LAUNCH CORRECTLY! %blue%
     ECHO:
@@ -172,47 +187,10 @@ IF DEFINED _JAVA_OPTIONS (
     ECHO  https://github.com/nanonestor/universalator/wiki
     ECHO:
     PAUSE & EXIT [\B]
+    )
   )
-:skipjavopts
 
-: Check for JDK_JAVA_OPTIONS
-IF NOT DEFINED JDK_JAVA_OPTIONS GOTO :skipjdkjavaoptions
-IF DEFINED JDK_JAVA_OPTIONS (
-  ECHO %JDK_JAVA_OPTIONS% | FINDSTR /i "xmx xmn" 1>NUL
 )
-  IF %ERRORLEVEL%==0 (
-    ECHO:
-    ECHO  %yellow% WARNING - IT WAS DETECTED THAT YOU HAVE THE WINDOWS ENVIRONMENTAL VARIABLE %blue%
-    ECHO  %yellow% NAMED %blue% JDK_JAVA_OPTIONS %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
-    ECHO:
-    ECHO  %yellow% PLEASE REMOVE THIS VALUE FROM THE VARIABLE SO THAT YOUR SERVER WILL LAUNCH CORRECTLY! %blue%
-    ECHO:
-    ECHO  IF YOU DON'T KNOW HOW - SEE THE UNIVERSALATOR WIKI / TROUBLESHOOTING AT:
-    ECHO  https://github.com/nanonestor/universalator/wiki
-    ECHO:
-    PAUSE & EXIT [\B]
-  )
-:skipjdkjavaoptions
-
-:: Check for JAVA_TOOL_OPTIONS
-IF NOT DEFINED JAVA_TOOL_OPTIONS GOTO :skipjavatooloptions
-IF DEFINED JAVA_TOOL_OPTIONS (
-  ECHO %JAVA_TOOL_OPTIONS% | FINDSTR /i "xmx xmn" 1>NUL
-)
-  IF %ERRORLEVEL%==0 (
-    ECHO:
-    ECHO  %yellow% WARNING - IT WAS DETECTED THAT YOU HAVE THE WINDOWS ENVIRONMENTAL VARIABLE %blue%
-    ECHO  %yellow% NAMED %blue% JAVA_TOOL_OPTIONS %yellow% SETTING GLOBAL RAM MEMORY VALUES SUCH AS -Xmx or -Xmn %blue%
-    ECHO:
-    ECHO  %yellow% PLEASE REMOVE THIS VALUE FROM THE VARIABLE SO THAT YOUR SERVER WILL LAUNCH CORRECTLY! %blue%
-    ECHO:
-    ECHO  IF YOU DON'T KNOW HOW - SEE THE UNIVERSALATOR WIKI / TROUBLESHOOTING AT:
-    ECHO  https://github.com/nanonestor/universalator/wiki
-    ECHO:
-    PAUSE & EXIT [\B]
-  )
-:skipjavatooloptions
-
 
 :: The below SET PATH only applies to this command window launch and isn't permanent to the system's PATH.
 :: It's only done if the tests fail to find the entries in the 'System PATH' environment variable, which they should be as default in Windows.
@@ -224,12 +202,9 @@ ECHO %PATH% | FINDSTR /L /C:C\:\Windows\SysWOW64\; >nul 2>&1 || SET "PATH=%PATH%
 ECHO %PATH% | FINDSTR /L /C:C\:\Windows\System32\WindowsPowerShell\v1.0\\; >nul 2>&1 || SET "PATH=%PATH%C:\Windows\System32\WindowsPowerShell\v1.0\;"
 
 :: Checks to see if CMD is working by checking WHERE for some commands - if the WHERE fails then a variable is set.
-WHERE FINDSTR >nul 2>&1 || SET CMDBROKEN=Y
-WHERE CERTUTIL >nul 2>&1 || SET CMDBROKEN=Y
-WHERE NETSTAT >nul 2>&1 || SET CMDBROKEN=Y
-WHERE PING >nul 2>&1 || SET CMDBROKEN=Y
-WHERE CURL >nul 2>&1 || SET CMDBROKEN=Y
-WHERE TAR >nul 2>&1 || SET CMDBROKEN=Y
+FOR %%X IN (FINDSTR CERTUTIL NETSTAT PING CURL TAR) DO (
+  WHERE %%X >nul 2>&1 || SET CMDBROKEN=Y
+)
 
 IF DEFINED CMDBROKEN IF !CMDBROKEN!==Y (
   ECHO:
@@ -266,6 +241,7 @@ WHERE powershell >nul 2>&1 || (
   PAUSE & EXIT [\B]
 )
 
+:: Checks to see if somehow the installed TAR command being used is the version that does not include zip and standard output functions.
 FOR /F "usebackq delims=" %%J IN (`"tar --version 2>&1"`) DO (
   ECHO %%J | FINDSTR /ic:"GNU tar" >nul && (
   ECHO: & ECHO:
@@ -453,8 +429,10 @@ IF DEFINED IPLINE IF /I !CHOOSE_IP!==CORRECT (
         IF %%T NEQ %IPLINE% IF "!serverprops[%%T]!" NEQ "" IF "!serverprops[%%T]!" NEQ "allow-flight=false" IF "!serverprops[%%T]!" NEQ "online-mode=false" ECHO !serverprops[%%T]!>>server.properties2
         IF "!serverprops[%%T]!"=="allow-flight=false" ECHO allow-flight=true>>server.properties2
         IF "!serverprops[%%T]!"=="online-mode=false" ECHO online-mode=true>>server.properties2
-        IF %%T==%IPLINE% ECHO server-ip=
+        IF %%T==%IPLINE% ECHO server-ip=>>server.properties2
     )
+    DEL server.properties
+    RENAME server.properties2 server.properties
     :: Skips past the last section since the job is done for this case.
     GOTO :skipserverproperties
 )
@@ -548,10 +526,12 @@ ver > nul
 
 :: BEGIN PUBLIC IP DETECTION
 
-:: Obtains the computer's public IP address by poking a website API service which specifically exists for this purpose - api.bigdatacloud.net is now used, it seems reliably fasteer than the older api.ipify.org used
-FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('https://api.bigdatacloud.net/data/client-ip') | Out-String | ConvertFrom-Json); $data.ipString"') DO SET PUBLICIP=%%B
-:: If trying api.bigdatacloud.net failed to get the public IP then try this different web service at ip-api.com
-IF NOT DEFINED PUBLICIP FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('http://ip-api.com/json/?fields=query') | Out-String | ConvertFrom-Json); $data.query"') DO SET PUBLICIP=%%B
+:: Obtains the computer's public IP address by poking a website API service which specifically exists for this purpose - api.bigdatacloud.net stopped sending ipv4 publicly and now sends only ipv6, so primary is ip-api.com now.
+FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('http://ip-api.com/json/?fields=query') | Out-String | ConvertFrom-Json); $data.query"') DO SET PUBLICIP=%%B
+:: If trying api-api.com failed to get the public IP then try this different web service at ip-api.com
+IF NOT DEFINED PUBLICIP FOR /F %%B IN ('powershell -Command "$data = ((New-Object System.Net.WebClient).DownloadString('https://api.ipify.org?format=json') | Out-String | ConvertFrom-Json); $data.ip"') DO SET PUBLICIP=%%B
+
+IF NOT DEFINED PUBLICIP SET "PUBLICIP=NOT DETECTED"
 
 :: BEGIN LOCAL IPV4 ADDRESS DETECTION
 
@@ -699,7 +679,7 @@ ECHO:    %green% RESTART %blue% = TOGGLE AUTOMATIC RESTART ON UNPLANNED SHUTDOWN
 ECHO:    %green% FIREWALL %blue% = CHECK FOR A VALID FIREWALL RULE SETTING FOR JAVA
 ECHO:    %green% UPNP %blue%     = UPNP PORT FORWARDING MENU
 ECHO:    %green% MCREATOR %blue% = SCAN MOD FILES FOR MCREATOR MADE MODS
-ECHO:    %green% OVERRIDE %blue% = USE CURRENTLY SET SYSTEM JAVA PATH INSTEAD OF INDEPENDENT JAVA
+ECHO:    %green% OVERRIDE %blue% = USE CURRENTLY SET SYSTEM JAVA PATH INSTEAD OF ADOPTIUM JAVA
 ECHO:    %green% ZIP %blue%      = MENU FOR CREATING SERVER PACK ZIP FILE & ECHO: & ECHO: & ECHO:
 GOTO :allcommandsentry
 
@@ -745,7 +725,7 @@ ECHO !MINECRAFT! | FINDSTR "[a-z] [A-Z]" && GOTO :startover
 SET "MCMINOR="
 FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO (
     SET /a MCMAJOR=%%E
-    SET /a MCMINOR=%%F
+    SET /a MCMINOR=%%F >nul 2>&1
 )
 IF NOT DEFINED MCMINOR SET /a MCMINOR=0
 
@@ -1162,7 +1142,7 @@ GOTO :redoenterforge
 
 IF NOT DEFINED MCMAJOR (
   SET "MCMINOR="
-  FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO SET /a MCMAJOR=%%E & SET /a MCMINOR=%%F
+  FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO SET /a MCMAJOR=%%E & SET /a MCMINOR=%%F >nul 2>&1
   IF NOT DEFINED MCMINOR SET /a MCMINOR=0
 )
 
@@ -1400,8 +1380,12 @@ ECHO   Universalator Java folder not found - Getting Java - !JAVAVERSION! - & EC
 IF !FOUNDJAVA!==Y GOTO :javafileisset
 
 :: Java 16 is not a LTS version and never had JRE releases so this is just being set as a variable because of that... Thanks Minecraft 1.17.
-::DDDD
+IF !JAVAVERSION!==16 SET "IMAGETYPE=jdk"
+IF !JAVAVERSION! NEQ 16 SET "IMAGETYPE=jre"
+
+:: If the old flag was put on FOUNDJAVA then test the the folder name of the existing old version found versus what the adoptium API says the newest release is for that Java version.
 IF !FOUNDJAVA!==OLD (
+  REM Uses the Adoptium URL Api to return the JSON for the parameters specified, and then the FOR loop pulls the last value printed which is that value in the JSON variable that got made.
   REM Java 8 used a bit of a different format for it's version information so a different value is used form the JSON.
 
   IF !JAVAVERSION!==8 FOR /F %%A IN ('powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('https://api.adoptium.net/v3/assets/feature_releases/8/ga?architecture=x64&heap_size=normal&image_type=jre&jvm_impl=hotspot&os=windows&page_size=1&project=jdk&sort_method=DEFAULT&sort_order=DESC&vendor=eclipse') | Out-String | ConvertFrom-Json)); $data.release_name"') DO SET NEWESTJAVA=%%A
@@ -1428,6 +1412,7 @@ IF !FOUNDJAVA!==OLD (
   ) 
 )
 
+:: At this point Java was either not found or was old with a newer version available as release from Adoptium.
 PUSHD "%HERE%\univ-utils\java"
 
 :javaretry
@@ -1462,7 +1447,7 @@ FOR /F %%F IN ('certutil -hashfile javabinaries.zip SHA256') DO (
 SET FILECHECKSUM=!OUT[1]!
 
 :: Checks to see if the calculated checksum hash is the same as stored value above - unzips file if valid
-IF %JAVACHECKSUM%==!FILECHECKSUM! (
+IF !JAVACHECKSUM!==!FILECHECKSUM! (
   tar -xf javabinaries.zip
   DEL javabinaries.zip
   ECHO   The downloaded Java binary and hashfile value match - file downloaded correctly is valid & ECHO:
@@ -1491,7 +1476,7 @@ SET "JAVANUM=!JAVANUM:-LTS=!"
 SET "MCMINOR="
 FOR /F "tokens=2,3 delims=." %%E IN ("!MINECRAFT!") DO (
     SET /a MCMAJOR=%%E
-    SET /a MCMINOR=%%F
+    SET /a MCMINOR=%%F >nul 2>&1
 )
 IF NOT DEFINED MCMINOR SET /a MCMINOR=0
 
@@ -1507,11 +1492,19 @@ IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 IF EXIST libraries/net/neofor
 IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 IF EXIST libraries/net/neoforged/neoforge/!NEOFORGE!/. GOTO :foundforge
 
 IF /I !MODLOADER!==FORGE (
-  IF EXIST libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/. GOTO :foundforge
-  IF EXIST forge-!MINECRAFT!-!FORGE!.jar GOTO :foundforge
-  IF EXIST minecraftforge-universal-!MINECRAFT!-!FORGE!.jar GOTO :foundforge
-  IF EXIST forge-!MINECRAFT!-!FORGE!-!MINECRAFT!-universal.jar GOTO :foundforge
-  IF EXIST forge-!MINECRAFT!-!FORGE!-universal.jar GOTO :foundforge
+  REM Sets variables for different file names that different versions of Forge have.
+  SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
+  IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 9 SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!-!MINECRAFT!"
+ 
+  REM Checks if installation of Forge is detected, different configurations depend on version.  Very old versions just checks for JAR file, old versions both the JAR file and libraries folder, newer style just the libraries folder.
+  SET FOUNDFORGEINST=N
+
+  IF !MCMAJOR! LEQ 6 IF EXIST "minecraftforge-universal-!FORGEFILENAMEORDER!.jar" SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 10 IF EXIST "forge-!FORGEFILENAMEORDER!-universal.jar" SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 11 IF !MCMAJOR! LEQ 16 IF EXIST "forge-!FORGEFILENAMEORDER!.jar" IF EXIST "libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\." SET FOUNDFORGEINST=Y
+  IF !MCMAJOR! GEQ 17 IF EXIST "libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\." SET FOUNDFORGEINST=Y
+
+  IF !FOUNDFORGEINST!==Y GOTO :foundforge
 )
 
 :: At this point assume the JAR file or libaries folder does not exist and installation is needed.
@@ -1553,13 +1546,6 @@ IF %ERRORLEVEL% NEQ 0 (
 
 :: Skips ahead if Neoforge instead of Forge
 IF /I !MODLOADER!==NEOFORGE GOTO :downloadneoforge
-
-:: Sets variables for different file names that different versions of Forge have.
-IF !MINECRAFT!==1.6.4 IF NOT EXIST minecraftforge-universal-1.6.4-!FORGE!.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
-IF !MCMAJOR! GEQ 7 IF !MCMAJOR! LEQ 9 IF NOT EXIST forge-!MINECRAFT!-!FORGE!-!MINECRAFT!-universal.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!-!MINECRAFT!"
-IF !MCMAJOR!==10 IF NOT EXIST forge-!MINECRAFT!-!FORGE!-universal.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
-IF !MCMAJOR! GEQ 11 IF !MCMAJOR! LEQ 16 IF NOT EXIST forge-!MINECRAFT!-!FORGE!.jar SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
-IF !MCMAJOR! GEQ 17 IF NOT EXIST libraries\net\minecraftforge\forge\!MINECRAFT!-!FORGE!\. SET "FORGEFILENAMEORDER=!MINECRAFT!-!FORGE!"
 
 :: Forge detect if specific version folder is present - if not delete all JAR files and 'install' folder to guarantee no files of different versions conflicting on later install.  Then downloads installer file.
 IF /I !MODLOADER!==FORGE (
@@ -1772,7 +1758,7 @@ IF EXIST univ-utils\allmodidsandfiles.txt DEL univ-utils\allmodidsandfiles.txt
 
   REM Checks to see if clientonlymods.txt exists, if it does check the age and delete to refresh if older than 1 day.  Then downloads file if it does not exist.
   IF EXIST "univ-utils\clientonlymods.txt" (
-    FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddDays(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
+    FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddHours(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
   )
   IF NOT EXIST "univ-utils\clientonlymods.txt" powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/nanonestor/utilities/main/clientonlymods.txt', 'univ-utils/clientonlymods.txt')" >nul
 
@@ -1796,6 +1782,11 @@ IF !MCMAJOR! LEQ 12 GOTO :scanmcmodinfo
 
 :: BEGIN SCANNING NEW STYLE (MC >1.12.2) mods.toml FILES IN MODS
 
+:: Set a variable for which name the mod ID file should be to read.  Neoforge 1.20.4 and older still used mods.toml
+IF /I !MODLOADER!==FORGE SET "MODIDFILENAME=mods.toml"
+IF /I !MODLOADER!==NEOFORGE SET "MODIDFILENAME=neoforge.mods.toml"
+IF /I !MODLOADER!==NEOFORGE IF !MCMAJOR!==20 IF !MCMINOR! LEQ 4 SET "MODIDFILENAME=mods.toml"
+
 :: For each found jar file - uses tar command to output using STDOUT the contents of the mods.toml.  For each line in the STDOUT output the line is checked.
 :: First a trigger is needed to determine if the [mods] section has been detected yet in the JSON.  Once that trigger variable has been set to Y then 
 :: the script scans to find the modID line.  A fancy function replaces the = sign with _ for easier string comparison to determine if the modID= line was found.
@@ -1809,10 +1800,11 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
    SET MODID[0]=x
    SET FOUNDMODPLACE=N
 
-   REM Sends the mods.toml to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
-   tar -xOf "mods\!SERVERMODS[%%T].file!" *\mods.toml >nul 2>&1
+   REM Sends the mod ID file to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
+   REM This is for the purpose of confirming that there is actually an ID file inside to be read by setting an errorlevel
+   tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME! >nul 2>&1
 
-   IF !ERRORLEVEL!==0 FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%T].file!" *\mods.toml') DO (
+   IF !ERRORLEVEL!==0 FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME!') DO (
     
       SET "TEMP=%%X"
       IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId=x!" (
@@ -1830,8 +1822,17 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
       )
       :: Detects if the current line has the [mods] string.  If it does then record to a varaible which will trigger checking for the string modId_ to detect the real modId of this mod file.
       IF "!TEMP!" NEQ "!TEMP:[mods]=x!" SET FOUNDMODPLACE=Y
+
+      :: Detects if the mod file has a value marking the mod as client side or not, this was added to Forge ID files at some point.
+      IF /I "!TEMP!" NEQ "!TEMP:clientSideOnly=x!" IF /I "!TEMP!" NEQ "!TEMP:true=x!" SET SERVERMODS[%%T].clientmarked=Y
    )
    SET SERVERMODS[%%T].id=!MODID[0]!
+
+   :: Resets the errorlevel
+   ver >nul
+   :: Checks to see if the mod is the 'Essential Mod' - which is a jarmod with no regular ID file, so it will never be picked up by the client scan method.
+   tar -xOf "mods\!SERVERMODS[%%T].file!" *\essential-loader.properties >nul 2>&1
+   IF !ERRORLEVEL!==0 del "mods\!SERVERMODS[%%T].file!" >nul 2>&1
 )
 :: Below skips to finishedscan label skipping the next section which is file scanning for old MC versions (1.12.2 and older).
 IF !MCMAJOR! GEQ 13 GOTO :finishedscan
@@ -1848,7 +1849,7 @@ set "TEMP=%%x%~3%%y"
 GOTO :l_replaceloop
 :skipreplacefunction
 
-:: END SCANNING NEW STYLE MODS.TOML
+:: END SCANNING NEW STYLE MODS.TOML / NEOFORGE.MODS.TOML
 :: BEGIN SCANNING OLD STYLE MCMOD.INFO
 
 :scanmcmodinfo
@@ -1889,23 +1890,31 @@ FOR /L %%t IN (0,1,!SERVERMODSCOUNT!) DO (
 :: END SCANNING OLD STYLE MCMOD.INFO
 :finishedscan
 
-
 :: This is it! Checking each server modid versus the client only mods list text file.  Starts with a loop through each server modID found.
 SET /a NUMCLIENTS=0
 FOR /L %%b IN (0,1,!SERVERMODSCOUNT!) DO (
 
-  :: Runs a FINDSTR to see if the string of the modID is found on a line.  This needs further checks to guarantee the modID is the entire line and not just part of it.
-  FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt >nul
-  
-  REM If errorlevel is 0 then the FINDSTR above found the modID.  The line returned by the FINDSTR can be captured into a variable by using a FOR loop.
-  REM That variable is compared to the server modID in question.  If they are equal then it is a definite match and the modID and filename are recorded to a list of client only mods found.
-  IF !ERRORLEVEL!==0 (
-    FOR /F "delims=" %%A IN ('FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt') DO (
+  REM IF - Looks to see if the mods ID file was labeled by the author as clientSideOnly=true
+  REM ELSE - run detection of client mods based on the Universalator curated client mods list.
 
-      IF /I !SERVERMODS[%%b].id!==%%A (
-        SET /a NUMCLIENTS+=1
-        SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
-        SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+  IF !SERVERMODS[%%b].clientmarked!==Y (
+    SET /a NUMCLIENTS+=1
+    SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
+    SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+  ) ELSE (
+    :: Runs a FINDSTR to see if the string of the modID is found on a line.  This needs further checks to guarantee the modID is the entire line and not just part of it.
+    FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt >nul
+  
+    REM If errorlevel is 0 then the FINDSTR above found the modID.  The line returned by the FINDSTR can be captured into a variable by using a FOR loop.
+    REM That variable is compared to the server modID in question.  If they are equal then it is a definite match and the modID and filename are recorded to a list of client only mods found.
+    IF !ERRORLEVEL!==0 (
+      FOR /F "delims=" %%A IN ('FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt') DO (
+
+        IF /I !SERVERMODS[%%b].id!==%%A (
+          SET /a NUMCLIENTS+=1
+          SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
+          SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+        )
       )
     )
   )
@@ -2081,7 +2090,7 @@ IF !MINECRAFT!==1.8.9 (
 "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.8.9-!FORGE!-1.8.9-universal.jar nogui
 ) 
 IF !MINECRAFT!==1.9.4 (
-"%JAVAFILE%"" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.9.4-!FORGE!-1.9.4-universal.jar nogui
+"%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.9.4-!FORGE!-1.9.4-universal.jar nogui
 ) 
 IF !MINECRAFT!==1.10.2 (
 "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-1.10.2-!FORGE!-universal.jar nogui
@@ -2100,7 +2109,8 @@ IF !LAUNCHFORGE!==NEWOLD (
   "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
 )
 IF !LAUNCHFORGE!==NEWNEW (
-  "%JAVAFILE%"" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
+  REM "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
+  "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
 )
 
 :actuallylaunchneoforge
@@ -2123,8 +2133,12 @@ GOTO :logsscan
 
 :: BEGIN FABRIC INSTALLATION SECTION
 :preparefabric
+
+IF !MCMINOR!==0 SET "FABRICMCNAME=1.!MCMAJOR!"
+IF !MCMINOR! NEQ 0 SET "FABRICMCNAME=!MINECRAFT!"
+
 :: Skips installation if already present, if either file is not present then assume a reinstallation is needed.
-IF EXIST fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar IF EXIST "libraries\net\fabricmc\fabric-loader\!FABRICLOADER!\fabric-loader-!FABRICLOADER!.jar" GOTO :launchfabric
+IF EXIST fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar IF EXIST "libraries\net\fabricmc\fabric-loader\!FABRICLOADER!\fabric-loader-!FABRICLOADER!.jar" GOTO :launchfabric
 
 :: Deletes existing core files and folders if this specific desired Fabric launch file not present.  This forces a fresh installation and prevents getting a mis-match of various minecraft and/or fabric version files conflicting.
 IF EXIST "%HERE%\.fabric" RD /s /q "%HERE%\.fabric\"
@@ -2183,7 +2197,7 @@ SET fabricinstallerhecksum=!FOUT[1]!
 :: IF yes then install fabric server files
 IF EXIST fabric-installer.jar (
     IF /I !INSTALLERVAL!==!fabricinstallerhecksum! (
-      "%JAVAFILE%" -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !MINECRAFT! -downloadMinecraft
+      "%JAVAFILE%" -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !FABRICMCNAME! -downloadMinecraft
     ) ELSE (
       DEL fabric-installer.jar
       ECHO:
@@ -2198,14 +2212,14 @@ IF EXIST fabric-installer.jar (
 IF EXIST fabric-installer.jar DEL fabric-installer.jar
 IF EXIST fabric-installer.jar.sha256 DEL fabric-installer.jar.sha256
 IF EXIST fabric-server-launch.jar (
-  RENAME fabric-server-launch.jar fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar
+  RENAME fabric-server-launch.jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar
 )
 
 :: Go to eula checking
 GOTO :eula
 :eulafabricreturn
 
-IF EXIST fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar (
+IF EXIST fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar (
   GOTO :launchfabric 
 ) ELSE (
   GOTO :preparefabric
@@ -2214,8 +2228,12 @@ IF EXIST fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar (
 
 :: BEGIN QUILT INSTALLATION SECTION
 :preparequilt
+
+IF !MCMINOR!==0 SET "QUILTMCNAME=1.!MCMAJOR!"
+IF !MCMINOR! NEQ 0 SET "QUILTMCNAME=!MINECRAFT!"
+
 :: Skips installation if already present
-IF EXIST quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar IF EXIST "libraries\org\quiltmc\quilt-loader\!QUILTLOADER!\quilt-loader-!QUILTLOADER!.jar" GOTO :launchquilt
+IF EXIST quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar IF EXIST "libraries\org\quiltmc\quilt-loader\!QUILTLOADER!\quilt-loader-!QUILTLOADER!.jar" GOTO :launchquilt
 
 :: Deletes existing core files and folders if this specific desired Fabric launch file not present.  This forces a fresh installation and prevents getting a mis-match of various minecraft and/or fabric version files conflicting.
 IF EXIST "%HERE%\.fabric" RD /s /q "%HERE%\.fabric\"
@@ -2282,7 +2300,7 @@ IF "%HERE%" NEQ "%HERE: =%" (
 )
 IF EXIST quilt-installer.jar (
     IF /I !INSTALLERVAL!==!quiltinstallerhecksum! (
-      "%JAVAFILE%" -XX:+UseG1GC -jar quilt-installer.jar install server !MINECRAFT! !QUILTLOADER! --download-server --install-dir=%cd%
+      "%JAVAFILE%" -XX:+UseG1GC -jar quilt-installer.jar install server !QUILTMCNAME! !QUILTLOADER! --download-server --install-dir=%cd%
     ) ELSE (
       DEL quilt-installer.jar
       ECHO:
@@ -2298,14 +2316,14 @@ IF EXIST quilt-installer.jar (
 IF EXIST quilt-installer.jar DEL quilt-installer.jar
 IF EXIST quilt-installer.jar.sha256 DEL quilt-installer.jar.sha256
 IF EXIST quilt-server-launch.jar (
-  RENAME quilt-server-launch.jar quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar
+  RENAME quilt-server-launch.jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar
 )
 
 :: Go to eula checking
 GOTO :eula
 :eulaquiltreturn
 
-IF EXIST quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar GOTO :launchquilt
+IF EXIST quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar GOTO :launchquilt
 GOTO :preparequilt
 
 :: END QUILT INSTALLATION SECTION
@@ -2551,7 +2569,7 @@ ECHO   Minecraft server JAR not found - attempting to download from Mojang serve
 
 :: As of May 17th 2024 it seems like Mojang may have ICMP blocked pinging the mojang server locations, so ping checks are currently disabled.
 :: Tries to ping the Mojang file server to check that it is online and responding
-:: ET /a pingmojang=1
+:: SET /a pingmojang=1
 :: :pingmojangagain
 
 :: ECHO   Pinging Mojang file server - Attempt # !pingmojang! ... & ECHO:
@@ -2688,10 +2706,10 @@ TITLE Universalator - !MINECRAFT! !MODLOADER!
 
 :: Actually launch the server!
 IF /I !MODLOADER!==FABRIC (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar fabric-server-launch-!MINECRAFT!-!FABRICLOADER!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui
 )
 IF /I !MODLOADER!==QUILT (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar quilt-server-launch-!MINECRAFT!-!QUILTLOADER!.jar nogui
+"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui
 )
 IF /I !MODLOADER!==VANILLA (
 "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar minecraft_server.!MINECRAFT!.jar nogui
@@ -3236,6 +3254,11 @@ ECHO: & ECHO   IF THIS MESSAGE IS VISIBLE SERVER MAY HAVE CRASHED / STOPPED & EC
 
 :skiplogchecking
 PAUSE
+
+:: Resets the background color to blue if modloader had set it to other
+color 1E
+CLS
+
 GOTO :mainmenu
 
 :: END LOGS SCANNING SECTION
