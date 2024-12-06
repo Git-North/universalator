@@ -2066,8 +2066,8 @@ ECHO:
 ECHO ============================================ & ECHO: & ECHO:
 ECHO   %yellow% READY TO LAUNCH FORGE SERVER! %blue%
 ECHO:
-ECHO            %yellow% ENTER 'M' IN 25 SECONDS FOR MAIN MENU %blue%
-ECHO            %yellow% ENTER ANY OTHER LETTER OR NUMBER IN THE ALPHABET TO CONTINUE %blue%
+ECHO            %yellow% PRESS 'M' IN 25 SECONDS FOR MAIN MENU %blue%
+ECHO            %yellow% PRESS ANY OTHER LETTER OR NUMBER IN THE ALPHABET TO CONTINUE %blue%
 ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 CHOICE /T 25 /C mABCDEFGHIJKLNOPQRSTUVWXYZ1234567890 /D L > nul
@@ -2690,8 +2690,8 @@ ECHO:
 ECHO ============================================ & ECHO: & ECHO:
 ECHO   %yellow% READY TO LAUNCH !MODLOADER! SERVER! %blue%
 ECHO:
-ECHO            %green% ENTER 'M' IN 25 SECONDS FOR MAIN MENU %blue%
-ECHO            %green% ENTER ANY OTHER LETTER OR NUMBER IN THE ALPHABET TO CONTINUE %blue%
+ECHO            %green% PRESS 'M' IN 25 SECONDS FOR MAIN MENU %blue%
+ECHO            %green% PRESS ANY OTHER LETTER OR NUMBER IN THE ALPHABET TO CONTINUE %blue%
 ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 CHOICE /T 25 /C mABCDEFGHIJKLNOPQRSTUVWXYZ1234567890 /D L > nul
