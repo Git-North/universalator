@@ -2690,12 +2690,13 @@ ECHO:
 ECHO ============================================ & ECHO: & ECHO:
 ECHO   %yellow% READY TO LAUNCH !MODLOADER! SERVER! %blue%
 ECHO:
-ECHO            ENTER %green% 'M' %blue% FOR MAIN MENU
-ECHO            ENTER %green% ANY OTHER %blue% KEY TO START SERVER LAUNCH 
+ECHO            %green% ENTER 'M' IN 25 SECONDS FOR MAIN MENU %blue%
+ECHO            %green% ENTER ANY OTHER LETTER OR NUMBER IN THE ALPHABET TO CONTINUE %blue%
 ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
-SET /P "FABRICLAUNCH="
-IF /I !FABRICLAUNCH!==M GOTO :mainmenu
+CHOICE /T 25 /C mABCDEFGHIJKLNOPQRSTUVWXYZ1234567890 /D L > nul
+set FABRICLAUNCH=%ERRORLEVEL%
+IF /I !FABRICLAUNCH!==1 GOTO :mainmenu
 
 ECHO: & ECHO   Launching... & ping -n 2 127.0.0.1 >nul & ECHO   Launching.. & ping -n 2 127.0.0.1 >nul & ECHO   Launching. & ECHO:
 
