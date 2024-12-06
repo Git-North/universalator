@@ -2066,12 +2066,13 @@ ECHO:
 ECHO ============================================ & ECHO: & ECHO:
 ECHO   %yellow% READY TO LAUNCH FORGE SERVER! %blue%
 ECHO:
-ECHO            %yellow% ENTER 'M' FOR MAIN MENU %blue%
-ECHO            %yellow% ENTER ANY OTHER KEY TO START SERVER LAUNCH %blue%
+ECHO            %yellow% ENTER 'M' IN 25 SECONDS FOR MAIN MENU %blue%
+ECHO            %yellow% ENTER ANY OTHER LETTER OR NUMBER IN THE ALPHABET TO CONTINUE %blue%
 ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
-SET /P "FORGELAUNCH="
-IF /I !FORGELAUNCH!==M GOTO :mainmenu
+CHOICE /T 25 /C mABCDEFGHIJKLNOPQRSTUVWXYZ1234567890 /D L > nul
+set FORGELAUNCH=%ERRORLEVEL%
+IF /I !FORGELAUNCH!==1 GOTO :mainmenu
 
 ECHO: & ECHO   Launching... & ping -n 2 127.0.0.1 > nul & ECHO   Launching.. & ping -n 2 127.0.0.1 > nul & ECHO   Launching. & ECHO:
 :: Starts forge depending on what java version is set.  Only correct combinations will launch - others will crash.
