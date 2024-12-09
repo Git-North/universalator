@@ -635,9 +635,17 @@ ECHO                                                        %green% SCAN %blue% 
 ECHO                                                        %green% A %blue%    = (LIST) ALL POSSIBLE MENU OPTIONS
 :allcommandsentry
 SET /P SCRATCH="%blue%  %green% ENTER A MENU OPTION:%blue% " <nul
-SET /P "MAINMENU="
+rem Check if a command-line argument is passed
+if "%1"=="" (
+    rem No argument passed, prompt the user for input
+    SET /P "MAINMENU= "
+) else (
+    rem Argument is passed, use it directly as MAINMENU
+    SET MAINMENU=%1
+)
 
-IF /I !MAINMENU!==Q COLOR 07 & CLS & EXIT [\B]
+rem Now, proceed with your menu options based on MAINMENU value
+IF /I !MAINMENU!==Q COLOR 07 & CLS & EXIT
 IF /I !MAINMENU!==UPNP GOTO :upnpmenu
 IF /I !MAINMENU!==R GOTO :justsetram
 IF /I !MAINMENU!==S GOTO :startover
