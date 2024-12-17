@@ -9,4 +9,4 @@ It also has some misc improvements like:
 - Removal of `online-mode: true` enforcement
 - Removal of `allow-flight: true` enforcement
 - Support for command-line arguments (Better Automation)
-- Server Launches in 25 seconds after going to the "Launch Server" screen
+- Server Launches in 25 seconds after going to the "Launch Server" screen (Better Automation)
