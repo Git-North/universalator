@@ -6,7 +6,7 @@ The reasoning for that is Adoptium's java lacks certain features which are neede
 
 It also has some misc improvements like:
 - Using Aikar's Flags
-- Removal of online-mode: true enforcement
-- Removal of allow-flight: true enforcement
+- Removal of `online-mode: true` enforcement
+- Removal of `allow-flight: true` enforcement
 - Support for command-line arguments (Better Automation)
 - Server Launches in 25 seconds after going to the "Launch Server" screen
