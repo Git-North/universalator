@@ -4,4 +4,9 @@ The main difference between the original and this fork is that this fork uses a 
 
 The reasoning for that is Adoptium's java lacks certain features which are needed for certain mods while also having an inferior garbage collector. This fork tries to solve that problem by using different java distributions.
 
-Another difference is that this version of universalator.bat uses Aikars jvm flags which increase performance on modded and vanilla servers, Has better automation support thanks to less inputs required to start the server, and removed code that forces online-mode and allow-flight to true
+It also has some misc improvements like:
+- Using Aikar's Flags
+- Removal of online-mode: true enforcement
+- Removal of allow-flight: true enforcement
+- Support for command-line arguments (Better Automation)
+- Server Launches in 25 seconds after going to the "Launch Server" screen
