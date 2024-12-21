@@ -874,7 +874,7 @@ IF /I !MODLOADER!==QUILT GOTO :enterquilt
 :redofabricloader
 IF /I !MODLOADER!==FABRIC (
 :: Gets the newest release version available from the current maven mavendata file.
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.release"') DO SET FABRICLOADER=%%A
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!'); $data.metadata.versioning.release"') DO SET FABRICLOADER=%%A
   CLS
   IF NOT EXIST settings-universalator.txt (
   ECHO:%yellow%
@@ -911,7 +911,7 @@ IF /I !ASKFABRICLOADER!==N (
 IF "!FABRICLOADER!" NEQ "!FABRICLOADER: =!" GOTO :redofabricloader
 
 :: If custom Fabric Loader was entered check on the maven XML file that it is a valid version
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.versions.version"') DO (
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!'); $data.metadata.versioning.versions.version"') DO (
   IF %%A==!FABRICLOADER! GOTO :setjava
 )
 :: If this point is reached then no valid Fabric Loader version was found on the maven - go to the oops message
@@ -920,7 +920,7 @@ GOTO :oopsnovalidfabricqulit
 :: If Quilt modloader ask user to enter version or Y for newest detected.
 :enterquilt
 :: Gets the newest release version available from the current maven mavendata file.
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.release"') DO SET QUILTLOADER=%%A
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!'); $data.metadata.versioning.release"') DO SET QUILTLOADER=%%A
   :redoenterquilt
   CLS
   IF NOT EXIST settings-universalator.txt (
@@ -958,7 +958,7 @@ IF /I !ASKQUILTLOADER!==N (
 IF "!QUILTLOADER!" NEQ "!QUILTLOADER: =!" GOTO :redofabricloader
 
 :: If custom Quilt Loader was entered check on the maven XML file that it is a valid version
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.versions.version"') DO (
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!'); $data.metadata.versioning.versions.version"') DO (
   IF %%A==!QUILTLOADER! GOTO :setjava
 )
 :oopsnovalidfabricqulit
@@ -1020,7 +1020,7 @@ SET MAVENISSUE=IDK
 IF /I !MODLOADER!==FORGE (
   SET /a idx=0
   SET "ARRAY[!idx!]="
-  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-forge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\maven-forge-metadata.xml'); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! (
         SET ARRAY[!idx!]=%%B
         SET /a idx+=1
@@ -1034,13 +1034,13 @@ REM If Neoforge get newest version available of the selected minecraft version.
 IF /I !MODLOADER!==NEOFORGE (
   SET "NEWESTNEOFORGE="
   REM This is the initial versions maven that Neoforge used - only for MC 1.20.1
-  IF !MINECRAFT!==1.20.1 FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-1.20.1-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  IF !MINECRAFT!==1.20.1 FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\maven-neoforge-1.20.1-metadata.xml'); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! (
         SET NEWESTNEOFORGE=%%B
     )
   )
   REM Neoforge changed how they version number their installer files starting with MC 1.20.2 - this is the new system.
-  IF !MINECRAFT! NEQ 1.20.1 FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  IF !MINECRAFT! NEQ 1.20.1 FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\maven-neoforge-metadata.xml'); $data.metadata.versioning.versions.version"') DO (
     REM If the current Minecraft version contains a minor version
     IF %%A==!MCMAJOR! IF %%B==!MCMINOR! (
         SET NEWESTNEOFORGE=%%A.%%B.%%C
@@ -1113,18 +1113,18 @@ IF !MODLOADER!==FORGE ECHO !FROGEENTRY! | FINDSTR "[a-z] [A-Z]" && SET FORGEENTR
 
 :: Checks maven metadata file to determine if any manually entered version entered does in fact exist
 IF /I !MODLOADER!==FORGE (
-  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-forge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\maven-forge-metadata.xml'); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! IF %%B==!FROGEENTRY! GOTO :foundvalidforgeversion
     )
 )
 IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 (
-  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-1.20.1-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\maven-neoforge-1.20.1-metadata.xml'); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! IF %%B==!FROGEENTRY! GOTO :foundvalidforgeversion
   )
 )
 
 IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 (
-  FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\maven-neoforge-metadata.xml'); $data.metadata.versioning.versions.version"') DO (
     IF [%%D]==[] IF %%A==!MCMAJOR! IF %%B==!MCMINOR! IF !FROGEENTRY!==%%A.%%B.%%C  GOTO :foundvalidforgeversion
     IF [%%D] NEQ [] IF %%A==!MCMAJOR! IF %%B==!MCMINOR! IF !FROGEENTRY!==%%A.%%B.%%C-%%D  GOTO :foundvalidforgeversion
   )
