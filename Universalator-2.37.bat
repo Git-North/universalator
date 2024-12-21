@@ -73,19 +73,27 @@ setlocal enabledelayedexpansion
 :: Sets the current directory as the working directory - this should fix attempts to run the script as admin.
 PUSHD "%~dp0" >nul 2>&1
 
+:: Gets the version number of the filename of this bat file.
+SET "UNIV_VERSION=%~n0"
+SET "UNIV_VERSION=%UNIV_VERSION:Universalator-=%"
+:: If any a-z are found at this point, user has changed the file name - set the version number variable empty to avoid awkward titles.
+ECHO %UNIV_VERSION% | FINDSTR "[a-z] [A-Z]" >nul && SET "UNIV_VERSION="
+
 :: Sets the title and backgound color of the command window
-TITLE Universalator
+TITLE Universalator %UNIV_VERSION%
 color 1E
 prompt [universalator]:
 ::  The defaut JVM arguments that will print out for use in the settings file that gets created.  Users can edit this settings file to edit their JVM arguments to be used for launching.
-SET ARGS=-XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:+DisableExplicitGC -XX:+PerfDisableSharedMem -XX:+AlwaysPreTouch -XX:+ParallelRefProcEnabled -XX:MaxTenuringThreshold=1 -XX:SurvivorRatio=32 -XX:MaxGCPauseMillis=100 -XX:GCPauseIntervalMillis=150 -XX:TargetSurvivorRatio=90 -XX:+UseFastAccessorMethods -XX:+UseCompressedOops -XX:ReservedCodeCacheSize=400M -XX:SoftRefLRUPolicyMSPerMB=10000 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1NewSizePercent=30 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20
+SET "ARGS=-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M"
 :: Additional JVM arguments that will always be applied
-SET OTHERARGS=-XX:+IgnoreUnrecognizedVMOptions -XX:+AlwaysActAsServerClassMachine -Dlog4j2.formatMsgNoLookups=true
+SET "OTHERARGS=-XX:+IgnoreUnrecognizedVMOptions -XX:+AlwaysActAsServerClassMachine -Dlog4j2.formatMsgNoLookups=true"
 :: These variables set to exist as blank in case windows is older than 10 and they aren't assigned otherwise
 SET "yellow="
 SET "blue="
 :: Sets a HERE variable equal to the current directory string.
 SET "HERE=%cd%"
+:: Makes a powershell specific HERE location, installing backquotes before single quotes - to prevent powershell functions breaking.
+SET "HEREPOWERSHELL=%HERE:'=`'%"
 
 SET "DELAY=ping -n 2 127.0.0.1 >nul"
 
@@ -95,23 +103,24 @@ SET "DELAY=ping -n 2 127.0.0.1 >nul"
 
 :: WINDOWS VERSION CHECK
 :: Versions equal to or older than Windows 8 (internal version number 6.2) will stop the script with warning.
-for /f "tokens=4-7 delims=[.] " %%i in ('ver') do (if %%i==Version (
-    set major=%%j
-    set minor=%%k 
+FOR /F "tokens=4-7 delims=[.] " %%i IN ('ver') DO ( IF /I %%i==Version (
+    set winmajor=%%j
+    set winminor=%%k 
     ) else (
-    set major=%%i
-    set minor=%%j
+    set winmajor=%%i
+    set winminor=%%j
     ))
 :: If Windows is older than 10 tells user the sad news that they are not supported.
 :: If Windows is greater than or equal to version 10 then set some variables to set console output colors!  Then skip OS warning.
-IF %major% LEQ 9 (
+IF %winmajor% LEQ 9 (
     ECHO: & ECHO: & ECHO:
     ECHO   YOUR WINDOWS VERSION IS OLD ENOUGH TO NOT BE SUPPORTED & ECHO:
     ECHO   UPDATING TO WINDOWS 10 OR GREATER IS HIGHLY RECOMMENDED
     ECHO:
     PAUSE & EXIT [\B]
 )
-IF %major% GEQ 10 (
+:: Sets font colors as handy variables
+IF %winmajor% GEQ 10 (
   SET yellow=[34;103m
   SET blue=[93;44m
   SET green=[93;42m
@@ -123,7 +132,6 @@ IF NOT EXIST "%HERE%\univ-utils\license.txt" WHERE powershell >nul && MD univ-ut
 
 :: Checks the last character of the folder name the script was run from.  If that last character is found in a FINDSTR to not contain an a-z, A-Z, or 0-9 character then prompt user to change the folder name or move the server files and pause/exit.
 :: Handling the character needs to be done carefully because it will be null in some cases without character escaping ^ or echo without entering variables as string.  Special characters at the end of the working folder breaks certain CMD commands.
-
 SET "LASTCHAR=%cd:~-1%"
 ECHO ^%LASTCHAR% | FINDSTR "[a-z] [A-Z] [0-9]" >nul || (
   CLS
@@ -135,23 +143,13 @@ ECHO ^%LASTCHAR% | FINDSTR "[a-z] [A-Z] [0-9]" >nul || (
 )
 
 :: Checks to see if an exclamation mark is found anywhere in the folder path, which breaks many commands in the script.  Disabling delayed expansion could be done to detect it a different way.
-FOR /F "delims=" %%A IN ('powershell -Command "ECHO (get-location).path | FINDSTR "^^!""') DO SET ISEXCLFOUND=%%A
-IF DEFINED ISEXCLFOUND IF "%CD%"=="!ISEXCLFOUND!" (
+FOR /F "delims=" %%A IN ('powershell -Command "ECHO (get-location).path | FINDSTR "^^!""') DO SET IS_EXCL_FOUND=%%A
+IF DEFINED IS_EXCL_FOUND IF "%CD%"=="!IS_EXCL_FOUND!" (
     setlocal disabledelayedexpansion
     ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO   %red% %cd% %blue% & ECHO. & ECHO   THE ABOVE FOLDER PATH CONTAINS AN EXCLAMATION MARK CHARACTER  - %red% ^! %blue% & ECHO.
     ECHO   INCLUDING THIS CHARACTER IN FOLDER NAMES CAN BREAK THE FUNCTIONS IN THE PROGRAM. & ECHO   CHANGE FOLDER NAMES TO REMOVE THE EXCLAMATION MARK %red% ^! %blue% & ECHO: & ECHO: & ECHO:
     PAUSE & EXIT [/B]
     setlocal enabledelayedexpansion
-)
-
-:: Checks to see if folder path contains an apostrophe / singlequote character, which breaks the execution of some powershell commands
-IF "!HERE!" NEQ "!HERE:'=x!" (
-  CLS
-  ECHO. & ECHO. & ECHO. & ECHO   %yellow% PROBLEM DETECTED %blue% & ECHO. & ECHO      %red% %cd% %blue% & ECHO. & ECHO      THE ABOVE FOLDER LOCATION CONTAINS AN APOSTROPHE / SINGLE QUOTE CHARACTER - %red% ' %blue% & ECHO:
-  ECHO      REMOVE THIS CHARACTER FROM THE FOLDER NAME / FOLDER PATH NAME & ECHO: & ECHO: & ECHO:
-  ECHO        ** THIS CHARACTER BREAKS THE FUNCTION OF SOME POWERSHELL COMMANDS & ECHO           WHICH THE SCRIPT USES, SO THEY ARE NOT ALLOWED
-  ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO: & ECHO:
-  PAUSE & EXIT [\B]
 )
 
 :: Checks to see if there are environmental variables trying to set global ram allocation values!  This is a real thing!
@@ -203,7 +201,7 @@ IF DEFINED CMDBROKEN IF !CMDBROKEN!==Y (
   ECHO             FOR REPAIR SOLUTIONS
   ECHO             SEE THE UNIVERSALATOR WIKI / TROUBLESHOOTING AT:
   ECHO:
-  ECHO             %green% https://github.com/nanonestor/universalator/wiki/4-Troubleshooting %blue%
+  ECHO             %green% https://github.com/nanonestor/universalator/wiki/6-Troubleshooting %blue%
   ECHO:
   ECHO             or
   ECHO             Web search for fixing / repairing Windows Command prompt function.
@@ -232,7 +230,7 @@ WHERE powershell >nul 2>&1 || (
 
 :: Checks to see if somehow the installed TAR command being used is the version that does not include zip and standard output functions.
 FOR /F "usebackq delims=" %%J IN (`"tar --version 2>&1"`) DO (
-  ECHO %%J | FINDSTR /ic:"GNU tar" >nul && (
+  ECHO %%J | FINDSTR /IC:"GNU tar" >nul && (
   ECHO: & ECHO:
   ECHO   %yellow% Uh oh - Somehow the TAR command function you OS is using, is the %red% GNU %yellow% made version. %blue%
   ECHO:
@@ -290,8 +288,8 @@ IF !FOLDER!==BAD (
     PAUSE & EXIT [\B]
 )
 
-ECHO "%LOC%" | FINDSTR /i "curseforge atlauncher at_launcher gdlauncher gd_launcher" 1>NUL && (
-      CLS
+ECHO %LOC% | FINDSTR /I "curseforge atlauncher at_launcher gdlauncher gd_launcher prismlauncher modrinthapp" 1>NUL && (
+    CLS
     ECHO:
     ECHO            WARNING %blue% WARNING  WARNING %blue%
     ECHO       %red% DO NOT PUT SERVER FOLDERS INSIDE OF LAUNCHER APP OR SYSTEM FOLDERS %blue%
@@ -361,7 +359,7 @@ IF /I !MODLOADER!==FORGE SET FORGE=!MODLOADERVERSION!
 IF /I !MODLOADER!==NEOFORGE SET NEOFORGE=!MODLOADERVERSION!
 IF /I !MODLOADER!==FABRIC SET FABRICLOADER=!MODLOADERVERSION!
 IF /I !MODLOADER!==QUILT SET QUILTLOADER=!MODLOADERVERSION!
-IF DEFINED MAXRAMGIGS SET MAXRAM=-Xmx!MAXRAMGIGS!G
+IF DEFINED MAXRAMGIGS SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
 SET OVERRIDE=N
 :: END GENERAL PRE-RUN ITEMS
 
@@ -455,16 +453,16 @@ IF %PORT% LSS 10000 (
 )
 
 :: Checks to see if the port is found as currently in-use with netstat
-( netstat -aon | findstr %PORT% >nul 2>&1 ) && SET FOUNDOPENPORT=Y
+( NETSTAT -aon | FINDSTR %PORT% >nul 2>&1 ) && SET FOUNDOPENPORT=Y
 
 :: If no entry was found SKIP this section entirely
 IF NOT DEFINED FOUNDOPENPORT GOTO :skipportclear
 
 :: Sets the PID number
-IF DEFINED FOUNDOPENPORT FOR /F "tokens=5 delims= " %%A IN ('netstat -aon ^| findstr %PORT%') DO SET PIDNUM=%%A
+IF DEFINED FOUNDOPENPORT FOR /F "tokens=5 delims= " %%A IN ('NETSTAT -aon ^| FINDSTR %PORT%') DO SET PIDNUM=%%A
 
 :: Gets the relevant information about the found task PID number
-FOR /F "tokens=1,3,4 delims= " %%E IN ('tasklist /fi "pid eq %PIDNUM%"') DO ( SET IMAGENAME=%%E & SET SESSIONNAME=%%F & SET SESSIONNUM=%%G )
+FOR /F "tokens=1,3,4 delims= " %%E IN ('TASKLIST /FI "pid eq %PIDNUM%"') DO ( SET IMAGENAME=%%E & SET SESSIONNAME=%%F & SET SESSIONNUM=%%G )
 
 :: If 'system' is found in the session name then skip
 ( ECHO %SESSIONNAME% | FINDSTR /I "system" >nul 2>&1 ) && GOTO :skipportclear
@@ -549,7 +547,6 @@ IF NOT DEFINED LOCALIP (
     )
   )
 )
-
 :exitlocalipset
 :: END GETTING LOCAL IPV4 ADDRESS TO BE USED
 
@@ -570,7 +567,7 @@ IF NOT EXIST settings-universalator.txt GOTO :startover
 
 :mainmenu
 
-TITLE Universalator
+TITLE Universalator %UNIV_VERSION%
 IF EXIST settings-universalator.txt (
   :: Reads off the contents of the settings file if it's present, to set current setting values.  Doing it this way avoids needing to rename the file to a .bat or .cmd to perform a CALL.
   FOR /F "delims=" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" %%A
@@ -699,13 +696,25 @@ ECHO: & ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P MINECRAFT=
 
-:: Checks to see if the MC just entered begins with 1. as a simple pass in case something else was entered.  Until Minecraft 2 happens this will be fine.
-:: Also checks if an entry was even made, and if there are any spaces in the entry.
-IF NOT DEFINED MINECRAFT GOTO :startover
-IF "!MINECRAFT:~0,2!" NEQ "1." GOTO :startover
-IF "!MINECRAFT!" NEQ "!MINECRAFT: =!" GOTO :startover
-ECHO !MINECRAFT! | FINDSTR "[a-z] [A-Z]" && GOTO :startover
+:: Goes to do the check to get a game manifest from Mojang.
+SET "SMODE=SETTINGS"
+GOTO :getmcmanifest
+:backmcmanifest
+SET "SMODE="
+:: Only do this test if a manifest was successfully obtained.
+IF EXIST "%HERE%\univ-utils\version_manifest_v2.json" (
+  SET FOUNDMC=IDK
 
+  FOR /F "delims=" %%A IN ('powershell -Command "$data=(Get-Content -Raw -Path 'univ-utils/version_manifest_v2.json' | Out-String | ConvertFrom-Json); $stuff=($data.versions | Where-Object -Property type -Value release -EQ); $stuff.id"') DO (
+    IF "%%A"=="!MINECRAFT!" SET FOUNDMC=Y
+  )
+  IF !FOUNDMC! NEQ Y (
+    ECHO: & ECHO   %red% THE ENTERED VERSION - %yellow% !MINECRAFT! %red% - WAS NOT FOUND TO BE A VALID RELEASE VERSION OF THE GAME %blue%
+    ECHO   %yellow% PLEASE TRY AGAIN^! %blue% & ECHO:
+    PAUSE
+    GOTO :startover
+  )
+)
 
 :: IF running SCAN from main menu it gets placed here first to get values for MC major and minor versions.
 :getmcmajor
@@ -827,23 +836,27 @@ IF /I !MODLOADER!==VANILLA GOTO :setjava
 
 :: If a maven metadata file for whichever modloader type is present - test its age.  Set a default value first so that if no file is found the default will be the same as if the file was returned as being old.
   SET XMLAGE=True
-  IF EXIST "%HERE%\univ-utils\maven-fabric-metadata.xml" IF /I !MODLOADER!==FABRIC FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\maven-fabric-metadata.xml' -OlderThan (Get-Date).AddHours(-6)"') DO SET XMLAGE=%%G
-  IF EXIST "%HERE%\univ-utils\maven-quilt-metadata.xml" IF /I !MODLOADER!==QUILT FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\maven-quilt-metadata.xml' -OlderThan (Get-Date).AddHours(-6)"') DO SET XMLAGE=%%G
+
+  If !MODLOADER!==FABRIC (
+    SET "METADATAFILE=maven-fabric-metadata.xml"
+    SET "METADATAURL=https://maven.fabricmc.net/net/fabricmc/fabric-loader/maven-metadata.xml"
+  )
+  IF !MODLOADER!==QUILT (
+    SET "METADATAFILE=maven-quilt-metadata.xml"
+    SET "METADATAURL=https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-loader/maven-metadata.xml"
+  )
+
+  IF EXIST "%HERE%\univ-utils\!METADATAFILE!" FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!' -OlderThan (Get-Date).AddHours(-6)"') DO SET XMLAGE=%%G
 
 :: If XMLAGE is True then a new maven metadata file is obtained.  Any existing is silently deleted.  If the maven is unreachable by ping then no file delete and download is done, so any existing old file is preserved.
-IF /I !MODLOADER!==FABRIC IF /I !XMLAGE!==True (
-    DEL "%HERE%\univ-utils\maven-fabric-metadata.xml" >nul 2>&1
-    curl -sLfo "%HERE%\univ-utils\maven-fabric-metadata.xml" https://maven.fabricmc.net/net/fabricmc/fabric-loader/maven-metadata.xml >nul 2>&1
-    IF NOT EXIST "%HERE%\univ-utils\maven-fabric-metadata.xml"  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://maven.fabricmc.net/net/fabricmc/fabric-loader/maven-metadata.xml', 'univ-utils\maven-fabric-metadata.xml')" >nul
+IF /I !XMLAGE!==True (
+    DEL "%HERE%\univ-utils\!METADATAFILE!" >nul 2>&1
+    curl -sLfo "%HERE%\univ-utils\!METADATAFILE!" !METADATAURL! >nul 2>&1
+    IF NOT EXIST "%HERE%\univ-utils\!METADATAFILE!"  powershell -Command "(New-Object Net.WebClient).DownloadFile('!METADATAURL!', 'univ-utils\!METADATAFILE!')" >nul
 )
-IF /I !MODLOADER!==QUILT IF /I !XMLAGE!==True (
-    DEL "%HERE%\univ-utils\maven-quilt-metadata.xml" >nul 2>&1
-    curl -sLfo "%HERE%\univ-utils\maven-quilt-metadata.xml" https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-loader/maven-metadata.xml >nul 2>&1
-    IF NOT EXIST "%HERE%\univ-utils\maven-quilt-metadata.xml"  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-loader/maven-metadata.xml', 'univ-utils\maven-quilt-metadata.xml')" >nul
-)
+
 :: Skips over the oops message if a maven metadata file was found
-IF EXIST "%HERE%\univ-utils\maven-fabric-metadata.xml" IF /I !MODLOADER!==FABRIC GOTO :skipmavenoopsfabric
-IF EXIST "%HERE%\univ-utils\maven-quilt-metadata.xml" IF /I !MODLOADER!==QUILT GOTO :skipmavenoopsfabric
+IF EXIST "%HERE%\univ-utils\!METADATAFILE!" GOTO :skipmavenoopsfabric
 
 :: If script gets here then either no maven metadata file ever existed, or an old file was deleted, and none was obtained from the maven either due to download problems or because the maven is offline.
 CLS
@@ -861,7 +874,7 @@ IF /I !MODLOADER!==QUILT GOTO :enterquilt
 :redofabricloader
 IF /I !MODLOADER!==FABRIC (
 :: Gets the newest release version available from the current maven mavendata file.
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-fabric-metadata.xml); $data.metadata.versioning.release"') DO SET FABRICLOADER=%%A
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.release"') DO SET FABRICLOADER=%%A
   CLS
   IF NOT EXIST settings-universalator.txt (
   ECHO:%yellow%
@@ -898,7 +911,7 @@ IF /I !ASKFABRICLOADER!==N (
 IF "!FABRICLOADER!" NEQ "!FABRICLOADER: =!" GOTO :redofabricloader
 
 :: If custom Fabric Loader was entered check on the maven XML file that it is a valid version
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-fabric-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.versions.version"') DO (
   IF %%A==!FABRICLOADER! GOTO :setjava
 )
 :: If this point is reached then no valid Fabric Loader version was found on the maven - go to the oops message
@@ -907,7 +920,7 @@ GOTO :oopsnovalidfabricqulit
 :: If Quilt modloader ask user to enter version or Y for newest detected.
 :enterquilt
 :: Gets the newest release version available from the current maven mavendata file.
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-quilt-metadata.xml); $data.metadata.versioning.release"') DO SET QUILTLOADER=%%A
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.release"') DO SET QUILTLOADER=%%A
   :redoenterquilt
   CLS
   IF NOT EXIST settings-universalator.txt (
@@ -945,7 +958,7 @@ IF /I !ASKQUILTLOADER!==N (
 IF "!QUILTLOADER!" NEQ "!QUILTLOADER: =!" GOTO :redofabricloader
 
 :: If custom Quilt Loader was entered check on the maven XML file that it is a valid version
-FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-quilt-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\!METADATAFILE!); $data.metadata.versioning.versions.version"') DO (
   IF %%A==!QUILTLOADER! GOTO :setjava
 )
 :oopsnovalidfabricqulit
@@ -964,31 +977,33 @@ IF !MODLOADER!==QUILT GOTO :enterquilt
 :: BEGIN SETTING VERSION FOR FORGE OR NEOFORGE
 
 :: If a maven metadata file for whichever modloader type is present - test its age.  Set a default value first so that if no file is found the default will be the same as if the file was returned as being old.
-  SET XMLAGE=True
-  IF EXIST "%HERE%\univ-utils\maven-forge-metadata.xml" IF /I !MODLOADER!==FORGE FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\maven-forge-metadata.xml' -OlderThan (Get-Date).AddHours(-2)"') DO SET XMLAGE=%%G
-  IF EXIST "%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml" IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml' -OlderThan (Get-Date).AddHours(-2)"') DO SET XMLAGE=%%G
-  IF EXIST "%HERE%\univ-utils\maven-neoforge-metadata.xml" IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\maven-neoforge-metadata.xml' -OlderThan (Get-Date).AddHours(-2)"') DO SET XMLAGE=%%G
+SET XMLAGE=True
 
+IF !MODLOADER!==FORGE (
+  SET "METADATAFILE=maven-forge-metadata.xml"
+  SET "METADATAURL=https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml"
+)
+IF !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 (
+  SET "METADATAFILE=maven-neoforge-1.20.1-metadata.xml"
+  SET "METADATAURL=https://maven.neoforged.net/releases/net/neoforged/forge/maven-metadata.xml"
+)
+IF !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 (
+  SET "METADATAFILE=maven-neoforge-metadata.xml"
+  SET "METADATAURL=https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml"
+)
+
+:: Does an age test to see if the file is older than some amount of time.
+IF EXIST "%HERE%\univ-utils\!METADATAFILE!" FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!' -OlderThan (Get-Date).AddHours(-2)"') DO SET XMLAGE=%%G
+ 
 :: If XMLAGE is True then a new maven metadata file is obtained.  Any existing is silently deleted.  If the maven is unreachable by ping then no file delete and download is done, so any existing old file is preserved.
-IF /I !MODLOADER!==FORGE IF /I !XMLAGE!==True (
-    DEL "%HERE%\univ-utils\maven-forge-metadata.xml" >nul 2>&1
-    curl -sLfo "%HERE%\univ-utils\maven-forge-metadata.xml" https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml >nul 2>&1
-    IF NOT EXIST "%HERE%\univ-utils\maven-forge-metadata.xml"  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml', 'univ-utils\maven-forge-metadata.xml')" >nul
+IF /I !XMLAGE!==True (
+    DEL "%HERE%\univ-utils\!METADATAFILE!" >nul 2>&1
+    curl -sLfo "%HERE%\univ-utils\!METADATAFILE!" !METADATAURL! >nul 2>&1
+    IF NOT EXIST "%HERE%\univ-utils\!METADATAFILE!"  powershell -Command "(New-Object Net.WebClient).DownloadFile('!METADATAURL!', 'univ-utils\!METADATAFILE!')" >nul
 )
-IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 IF /I !XMLAGE!==True (
-    DEL "%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml" >nul 2>&1
-    curl -sLfo "%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml" https://maven.neoforged.net/releases/net/neoforged/forge/maven-metadata.xml >nul 2>&1
-    IF NOT EXIST "%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml"  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://maven.neoforged.net/releases/net/neoforged/forge/maven-metadata.xml', 'univ-utils\maven-neoforge-1.20.1-metadata.xml')" >nul
-)
-IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 IF /I !XMLAGE!==True (
-    DEL "%HERE%\univ-utils\maven-neoforge-metadata.xml" >nul 2>&1
-    curl -sLfo "%HERE%\univ-utils\maven-neoforge-metadata.xml" https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml >nul 2>&1
-    IF NOT EXIST "%HERE%\univ-utils\maven-neoforge-metadata.xml"  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml', 'univ-utils\maven-neoforge-metadata.xml')" >nul
-)
+
 :: Skips over the oops message if a maven metadata file was found
-IF EXIST "%HERE%\univ-utils\maven-forge-metadata.xml" IF /I !MODLOADER!==FORGE GOTO :skipmavenoopsforge
-IF EXIST "%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml" IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 GOTO :skipmavenoopsforge
-IF EXIST "%HERE%\univ-utils\maven-neoforge-metadata.xml" IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 GOTO :skipmavenoopsforge
+IF EXIST "%HERE%\univ-utils\!METADATAFILE!" GOTO :skipmavenoopsforge
 
 :: If script gets here then either no maven metadata file ever existed, or an old file was deleted, and none was obtained from the maven either due to download problems or because the maven is offline.
 CLS
@@ -999,12 +1014,13 @@ PAUSE
 GOTO :startover
 
 :skipmavenoopsforge
+:: Scanning each type of maven metadata file is different.
 SET MAVENISSUE=IDK
 :: If Forge get newest version available of the selected minecraft version.
 IF /I !MODLOADER!==FORGE (
   SET /a idx=0
   SET "ARRAY[!idx!]="
-  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-forge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-forge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! (
         SET ARRAY[!idx!]=%%B
         SET /a idx+=1
@@ -1018,13 +1034,13 @@ REM If Neoforge get newest version available of the selected minecraft version.
 IF /I !MODLOADER!==NEOFORGE (
   SET "NEWESTNEOFORGE="
   REM This is the initial versions maven that Neoforge used - only for MC 1.20.1
-  IF !MINECRAFT!==1.20.1 FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-neoforge-1.20.1-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  IF !MINECRAFT!==1.20.1 FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-1.20.1-metadata.xml); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! (
         SET NEWESTNEOFORGE=%%B
     )
   )
   REM Neoforge changed how they version number their installer files starting with MC 1.20.2 - this is the new system.
-  IF !MINECRAFT! NEQ 1.20.1 FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-neoforge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  IF !MINECRAFT! NEQ 1.20.1 FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
     REM If the current Minecraft version contains a minor version
     IF %%A==!MCMAJOR! IF %%B==!MCMINOR! (
         SET NEWESTNEOFORGE=%%A.%%B.%%C
@@ -1041,9 +1057,8 @@ IF !MAVENISSUE!==Y (
   ECHO      OR - OR - OR & ECHO: & ECHO   %red% THE MAVEN FILE %blue% IS SOMEHOW INCOMPLETE / CORRUPTED & ECHO: & ECHO: & ECHO: & ECHO: 
   ECHO      %yellow% PRESS ANY KEY TO START OVER AND TRY AGAIN.%blue% & ECHO      THE EXISTING MAVEN METADATA FILE WILL BE DELETED TO GET RE-DOWNLOADED NEXT TRY & ECHO:
   PAUSE
-  IF /I !MODLOADER!==FORGE DEL "%HERE%\univ-utils\maven-forge-metadata.xml" >nul 2>&1
-  IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 DEL "%HERE%\univ-utils\maven-neoforge-1.20.1-metadata.xml" >nul 2>&1
-  IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 DEL "%HERE%\univ-utils\maven-neoforge-metadata.xml" >nul 2>&1
+  DEL "%HERE%\univ-utils\!METADATAFILE!" >nul 2>&1
+
   GOTO :startover
 )
 
@@ -1098,18 +1113,18 @@ IF !MODLOADER!==FORGE ECHO !FROGEENTRY! | FINDSTR "[a-z] [A-Z]" && SET FORGEENTR
 
 :: Checks maven metadata file to determine if any manually entered version entered does in fact exist
 IF /I !MODLOADER!==FORGE (
-  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-forge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-forge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! IF %%B==!FROGEENTRY! GOTO :foundvalidforgeversion
     )
 )
 IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT!==1.20.1 (
-  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-neoforge-1.20.1-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1,2 delims=-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-1.20.1-metadata.xml); $data.metadata.versioning.versions.version"') DO (
     IF %%A==!MINECRAFT! IF %%B==!FROGEENTRY! GOTO :foundvalidforgeversion
   )
 )
 
 IF /I !MODLOADER!==NEOFORGE IF !MINECRAFT! NEQ 1.20.1 (
-  FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path univ-utils\maven-neoforge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
+  FOR /F "tokens=1-4 delims=.-" %%A IN ('powershell -Command "$data = [xml](Get-Content -Path %HEREPOWERSHELL%\univ-utils\maven-neoforge-metadata.xml); $data.metadata.versioning.versions.version"') DO (
     IF [%%D]==[] IF %%A==!MCMAJOR! IF %%B==!MCMINOR! IF !FROGEENTRY!==%%A.%%B.%%C  GOTO :foundvalidforgeversion
     IF [%%D] NEQ [] IF %%A==!MCMAJOR! IF %%B==!MCMINOR! IF !FROGEENTRY!==%%A.%%B.%%C-%%D  GOTO :foundvalidforgeversion
   )
@@ -1242,7 +1257,7 @@ SET /a TEST1=!MAXRAMGIGS!
 IF !MAXRAMGIGS! NEQ !TEST1! GOTO :badramentry
 
 :: Sets the actual MAXRAM variable to launch the server with now that tests have passed.
- SET MAXRAM=-Xmx!MAXRAMGIGS!G
+ SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
 
   :: END RAM / MEMORY SETTING
 
@@ -1287,7 +1302,7 @@ IF NOT EXIST settings-universalator.txt (
 IF /I !MAINMENU!==R GOTO :mainmenu
 IF /I !MAINMENU!==J GOTO :mainmenu
 
-SET MAXRAM=-Xmx!MAXRAMGIGS!G
+SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
 
 :: Returns to main menu if asking to scan mods is flagged as done previously once before
 :: Otherwise if Y goes to the mod scanning section for each modloader
@@ -1323,8 +1338,9 @@ IF /I !MODLOADER! NEQ VANILLA IF NOT EXIST "%HERE%\mods" (
 
 CLS
 ECHO:
-:: BEGIN JAVA SETUP SECTION
-:: Presets a variable to use as a search string versus java folder names.
+REM BEGIN JAVA SETUP SECTION
+REM Presets a variable to use as a search string versus java folder names.
+
 IF !JAVAVERSION!==8 SET FINDFOLDER=jdk8u
 IF !JAVAVERSION!==11 SET FINDFOLDER=jdk-11
 IF !JAVAVERSION!==16 SET FINDFOLDER=jdk-16
@@ -1342,7 +1358,7 @@ FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
     ECHO   Found existing Java !JAVAVERSION! folder - %%A & ECHO:
     ping -n 1 127.0.0.1 >nul
     :: Runs a FOR loop with a powershell command to check the age of the found java folder.  If it's older than 3 months result is 'True'.  If it's newer than 3 months result is 'False'.
-    FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\java\%%A' -OlderThan (Get-Date).AddMonths(-2.5)"') DO (
+    FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\java\%%A' -OlderThan (Get-Date).AddMonths(-2.5)"') DO (
       :: If False then that means the folder is newer than 3 months - go ahead and use that folder for java, then move on!
       IF %%G==False (
         SET "JAVAFILE=univ-utils\java\%%A\bin\java.exe"
@@ -1411,7 +1427,7 @@ ECHO   Downloading Java !JAVAVERSION! newest version from Adoptium & ECHO:
 SET "ADOPTIUMDL=https://api.adoptium.net/v3/assets/feature_releases/!JAVAVERSION!/ga?architecture=x64&heap_size=normal&image_type=!IMAGETYPE!&jvm_impl=hotspot&os=windows&page_size=1&project=jdk&sort_method=DEFAULT&sort_order=DESC&vendor=eclipse"
 ver >nul
 :: Gets the download URL for the newest release binaries ZIP using the URL Api and then in the same powershell command downloads it.  This avoids having to manipulate URL links with % signs in them in the CMD environment which is tricky.
-powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('!ADOPTIUMDL!') | Out-String | ConvertFrom-Json)); (New-Object Net.WebClient).DownloadFile($data.binaries.package.link, '%HERE%\univ-utils\java\javabinaries.zip')"
+powershell -Command "$data=(((New-Object System.Net.WebClient).DownloadString('!ADOPTIUMDL!') | Out-String | ConvertFrom-Json)); (New-Object Net.WebClient).DownloadFile($data.binaries.package.link, '%HEREPOWERSHELL%\univ-utils\java\javabinaries.zip')"
 
 IF NOT EXIST "%HERE%\univ-utils\java\javabinaries.zip" (
   ECHO: & ECHO: & ECHO   JAVA BINARIES ZIP FILE FAILED TO DOWNLOAD - PRESS ANY KEY TO TRY AGAIN! & ECHO: & ECHO:
@@ -1743,7 +1759,7 @@ IF EXIST univ-utils\allmodidsandfiles.txt DEL univ-utils\allmodidsandfiles.txt
 
   REM Checks to see if clientonlymods.txt exists, if it does check the age and delete to refresh if older than 1 day.  Then downloads file if it does not exist.
   IF EXIST "univ-utils\clientonlymods.txt" (
-    FOR /F %%G IN ('powershell -Command "Test-Path '%HERE%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddHours(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
+    FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddHours(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
   )
   IF NOT EXIST "univ-utils\clientonlymods.txt" powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/nanonestor/utilities/main/clientonlymods.txt', 'univ-utils/clientonlymods.txt')" >nul
 
@@ -1794,11 +1810,12 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
       SET "TEMP=%%X"
       IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId=x!" (
          SET "TEMP=!TEMP: =!"
+         SET "TEMP=!TEMP:%TABCHAR%=!"
          SET "TEMP=!TEMP:#mandatory=!"
          :: CALLs a special function to replace equals with underscore characters for easier detection.
-         CALL :l_replace "!TEMP!" "=" "_"
+         CALL :l_replace "!TEMP!" "=" ";" "TEMP"
       )
-      IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId_=x!" (
+      IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId;=x!" (
       :: Uses special carats to allow using double quotes " as delimiters, to find the modID value.
       FOR /F delims^=^"^ tokens^=2 %%Y IN ("!TEMP!") DO SET ID=%%Y
        SET MODID[!MODIDLINE!]=!ID!
@@ -1822,20 +1839,10 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
 :: Below skips to finishedscan label skipping the next section which is file scanning for old MC versions (1.12.2 and older).
 IF !MCMAJOR! GEQ 13 GOTO :finishedscan
 
-GOTO :skipreplacefunction
-:: Function to replace strings within variable strings - hot stuff!
-:l_replace
-SET "TEMP=x%~1x"
-:l_replaceloop
-FOR /f "delims=%~2 tokens=1*" %%x IN ("!TEMP!") DO (
-IF "%%y"=="" set "TEMP=!TEMP:~1,-1!"&exit/b
-set "TEMP=%%x%~3%%y"
-)
-GOTO :l_replaceloop
-:skipreplacefunction
 
 :: END SCANNING NEW STYLE MODS.TOML / NEOFORGE.MODS.TOML
 :: BEGIN SCANNING OLD STYLE MCMOD.INFO
+
 
 :scanmcmodinfo
 :: For each found jar file - uses tar command to output using STDOUT the contents of the mods.toml.  For each line in the STDOUT output the line is checked.
@@ -1853,18 +1860,16 @@ FOR /L %%t IN (0,1,!SERVERMODSCOUNT!) DO (
   tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info >nul 2>&1
 
   IF !ERRORLEVEL!==0 FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info') DO (
-    :: Sets ID to undefined if it was previously defined
-    SET "ID="
     :: Sets a temp variable equal to the current line for processing, and replaces " with ; for easier loop delimiting later.
     SET "TEMP=%%X"
     SET "TEMP=!TEMP:"=;!"
     :: If the line contains the modid then further process line and then set ID equal to the actual modid entry.
     IF "!TEMP!" NEQ "!TEMP:;modid;=x!" (
-      SET "TEMP=!TEMP:%TABCHAR%=!"
-      SET "TEMP=!TEMP: =!"
-      SET "TEMP=!TEMP:;=!"
-      SET "TEMP=!TEMP:,=!"
-      FOR /F "tokens=2 delims=:" %%Y IN ("!TEMP!") DO (
+            SET "TEMP=!TEMP:%TABCHAR%=!"
+            SET "TEMP=!TEMP: =!"
+            SET "TEMP=!TEMP:[=!"
+            SET "TEMP=!TEMP:{=!"
+      FOR /F "tokens=3 delims=;" %%Y IN ("!TEMP!") DO (
         SET SERVERMODS[%%t].id=%%Y
       )
     )
@@ -1944,26 +1949,6 @@ FOR /L %%D IN (1,1,!NUMCLIENTS!) DO (
 	ECHO   !Column!  -   !FOUNDCLIENTS[%%D].file!
 )
 
-GOTO :continue2
-:: Function used above for determining max character length of any of the modIDs.
-:GetMaxStringLength
-
-:: Usage : GetMaxStringLength OutVariableName StringToBeMeasured
-:: Note  : OutVariable may already have an initial value
-SET StrTest=%~2
-:: Just add zero, in case the initial value is empty
-SET /A %1+=0
-:: Maximum length we will allow, modify appended spaces accordingly
-SET MaxLength=80
-IF %MaxLength% GTR !%1! (
-	FOR /L %%e IN (!%1!,1,%MaxLength%) DO (
-		IF NOT "!StrTest:~%%e!"=="" (
-			SET /A %1=%%e+1
-		)
-	)
-)
-GOTO:EOF
-:continue2
 
   ECHO    ------------------------------------------------------ & ECHO: & ECHO:
   ECHO   %green% *** DO YOU WANT TO MOVE THESE CLIENT MODS TO A DIFFERENT FOLDER FOR SAFE KEEPING? *** %blue%
@@ -2061,7 +2046,14 @@ ECHO: & ECHO   Launching... & ping -n 2 127.0.0.1 > nul & ECHO   Launching.. & p
 :: Starts forge depending on what java version is set.  Only correct combinations will launch - others will crash.
 
 IF !OVERRIDE!==Y SET "JAVAFILE=java"
-TITLE Universalator - !MINECRAFT! !MODLOADER!
+
+:: If the ARGS setting has not been changed by the user, use no default args for Java 17+.  Newer Java versions are much better at being self-optimizing than older versions.
+:: The user can still totally enter their own custom args if they want!  Or these with literally any tiny number change.
+If !JAVAVERSION! GEQ 17 (
+  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" SET "ARGS="
+)
+
+TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 ver >nul
 IF /I !MODLOADER!==NEOFORGE GOTO :actuallylaunchneoforge
 
@@ -2076,6 +2068,7 @@ IF !MCMAJOR! LEQ 16 (
   IF NOT DEFINED FORGEFILE (
     ECHO: & ECHO   %yellow% A FORGE LAUNCH JAR FILE WAS NOT FOUND BY THE SCRIPT %blue% & ECHO:
     PAUSE
+    GOTO :mainmenu
   )
 
   "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar !FORGEFILE! nogui
@@ -2328,68 +2321,69 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
   SET SERVERMODS[%%f].environ=N
   SET /a COUNT=%%f
   SET /a COUNT+=1
+  :: Starts a variable to keep things appended to the .deps variable surrounded in semicolons.
+  SET "SERVERMODS[%%f].deps=;"
+
   ECHO SCANNING !COUNT!/%ACTUALMODSCOUNT% - !SERVERMODS[%%f].file!
 
-  tar -xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json >nul 2>&1
-  IF !ERRORLEVEL!==0 (
-    FOR /F %%A IN ('powershell -Command "$json=(tar xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.id"') DO SET SERVERMODS[%%f].id=%%A
-    FOR /F %%A IN ('powershell -Command "$json=(tar xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.minecraft.environment"') DO (
-      IF %%A==client IF !SERVERMODS[%%f].id! NEQ modmenu SET SERVERMODS[%%f].environ=C
-    )
-    FOR /F %%B IN ('powershell -Command "$json=(tar xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.depends.id"') DO (
-                IF %%B NEQ quilt_loader IF %%B NEQ minecraft IF %%B NEQ quilt_base IF %%B NEQ java IF %%B NEQ cloth-config IF %%B NEQ cloth-config2 IF %%B NEQ fabric-language-kotlin IF %%B NEQ iceberg IF %%B NEQ quilted_fabric_api IF %%B NEQ creativecore IF %%B NEQ architectury ECHO %%B>>univ-utils\allfabricdeps.txt
-    )
-  ) ELSE (
   tar -xOf "mods\!SERVERMODS[%%f].file!" fabric.mod.json >nul 2>&1
 
   REM Uses STDOUT from tar command to loop through each line in the fabric.mod.json file of each mod file.
   IF !ERRORLEVEL!==0 FOR /F "delims=" %%I IN ('tar -xOf "mods\!SERVERMODS[%%f].file!" fabric.mod.json') DO (
-    
+
     REM Sets a temp variable equal to the current line for processing, and replaces " with ; for easier loop delimiting later.
     SET "TEMP=%%I"
     SET "TEMP=!TEMP:"=;!"
+
+    REM MODID DETECTION
     REM If the line contains the modid then further process line and then set ID equal to the actual modid entry.
+    REM AND takes care of all JSONs which are formatted on one line only.
     IF "!TEMP!" NEQ "!TEMP:;id;=x!" (
-      SET "TEMP=!TEMP:%TABCHAR%=!"
-      SET "TEMP=!TEMP: =!"
-      SET "TEMP=!TEMP::=!"
-      REM Normal id delims detection
-      FOR /F "tokens=2 delims=;" %%Q IN ("!TEMP!") DO (
-        SET SERVERMODS[%%f].id=%%Q
-      )
+      IF !JSONLINE! NEQ 0 (
+        :: MULTI LINE ID
+        SET "TEMP=!TEMP:%TABCHAR%=!"
+        SET "TEMP=!TEMP: =!"
+        SET "TEMP=!TEMP::=!"
+        :: Removes unicode greater than and less than codes, for some reason fabric authors have started doing this?
+        SET "TEMP=!TEMP:\u003d=!"
+        SET "TEMP=!TEMP:\u003e=!"
+        REM Normal id delims detection
+        FOR /F "tokens=1-3 delims=;" %%Q IN ("!TEMP!") DO (
+          SET SERVERMODS[%%f].id=%%R
+        )
+      ) ELSE (
+      :: This ELSE will be all times when the line number is 0 and modID is found, meaning a 1-line fabric.mod.json - Do all 1-line JSON processing here
+        REM Detection for cases when JSON files are formatted to all be on one line instead of multiple lines.
+        REM This method is REALLY slow.  Only to be used here if the CMD way if it's detected that the JSON is formatted onto one line.
 
-      REM Delims detection for cases when JSON files are formatted to all be on one line instead of multiple lines.  hopefully the rest of the format is regular - otherwise incorrect entry will be recorded for the id.
-      REM This could be made fancier by adding more tokens and comparing them to see which one equals id and then recording the next token as the id entry.
-      IF !JSONLINE!==0 FOR /F "tokens=5 delims=;" %%Q IN ("!TEMP!") DO (
-        REM Assumes that JSON is formatted normally so that the 5th token is the mod ID and records it.
-        SET SERVERMODS[%%f].id=%%Q
-        REM Outputs the fabric.mod.json file to an actual unzipped file so that powershell can read it.
-        PUSHD univ-utils
+        REM SINGLE LINE ID
+        REM Sets single quotes in file names to have a powershell escape character in front.
+        SET "THISFILENAME=mods\!SERVERMODS[%%f].file!"
+        SET "THISFILENAME=!THISFILENAME:'=`'!"
+        FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.id"') DO ( SET SERVERMODS[%%f].id=%%A )
 
-        tar -xf "%HERE%\mods\!SERVERMODS[%%f].file!" fabric.mod.json >nul 2>&1
+        REM SINGLE LINE DEPENDENCIES
+        REM Makes a list of dependencies excluding a few to be ignored.  Semicolons used as a spacer in the holder variable.  If someone uses a semicolon in their dependency name, I swear to god...
+        FOR /F %%D IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.depends.psobject.properties.name"') DO (
+          IF %%D NEQ fabricloader IF %%D NEQ minecraft IF %%D NEQ fabric IF %%D NEQ java IF %%D NEQ cloth-config IF %%D NEQ cloth-config2 IF %%D NEQ fabric-language-kotlin IF %%D NEQ iceberg IF %%D NEQ fabric-resource-loader-v0 IF %%D NEQ creativecore IF %%D NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%D;"
+        )
 
-        POPD
-        REM Uses powershell to output the dependency values in fabric.mod.json
-        powershell -Command "$json=Get-Content -Raw -Path 'univ-utils\fabric.mod.json' | Out-String | ConvertFrom-Json; $json.depends.psobject.properties.name | Out-File -FilePath univ-utils\single-line-mod-deps.txt"
-        REM Scans the dependency values just dumped and prints them to the master file to compile them - filters out commonly added values to ignore.
-        FOR /F "delims=" %%D IN (univ-utils\single-line-mod-deps.txt) DO (
-          IF %%D NEQ fabricloader IF %%D NEQ minecraft IF %%D NEQ fabric IF %%D NEQ java IF %%D NEQ cloth-config IF %%D NEQ cloth-config2 IF %%D NEQ fabric-language-kotlin IF %%D NEQ iceberg IF %%D NEQ fabric-resource-loader-v0 IF %%D NEQ creativecore IF %%D NEQ architectury ECHO %%D>>univ-utils\allfabricdeps.txt
+        REM SINGLE LINE ENVIRONMENT
+        FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.environment"') DO (
+          IF /I "%%A"=="client" ( SET SERVERMODS[%%f].environ=C ) ELSE ( SET SERVERMODS[%%f].environ=N )
         )
       )
-
-      
     )
+    :: MULT LINE ENVIRONMENT
     REM Detects with the string replacement method if the enviroment value is present, and then if found whether the client entry is present.  Otherwise if environment is found but client not - mark mod as not client.
     IF "!TEMP!" NEQ "!TEMP:;environment;=x!" (
-      SET "TEMP=!TEMP: =!"
-      SET "TEMP=!TEMP::=!"
-      IF "!TEMP!" NEQ "!TEMP:;environment;;client;,=x!" IF !SERVERMODS[%%f].id! NEQ modmenu (
+      IF "!TEMP!" NEQ "!TEMP:client=x!" IF "!SERVERMODS[%%f].id!" NEQ "modmenu" (
         SET SERVERMODS[%%f].environ=C
         SET FOUNDFABRICCLIENTS=Y
-      ) ELSE ( 
-        IF NOT DEFINED SERVERMODS[%%f].environ SET SERVERMODS[%%f].environ=N
-      )
+      ) ELSE ( SET SERVERMODS[%%f].environ=N )
     )
+
+    :: MULTI LINE DEPENDENCIES
     REM If the depends value was found in a previous loop but the }, string is found - set the FOUDNDEPENDS variable back equal to N to stop recording entries.
     IF !FOUNDDEPENDS!==Y IF "!TEMP!" NEQ "!TEMP:},=x!" SET FOUNDDEPENDS=N
     REM If the depends value was found in a previous loop and no JSON value ending strings are found - record the dependency entry (ignores common entries that aren't relevant)
@@ -2398,36 +2392,62 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
       SET "TEMP=!TEMP: =!"
       SET "TEMP=!TEMP::=!"
       IF !FOUNDDEPENDS!==Y FOR /F "delims=;" %%g IN ("!TEMP!") DO (
-        IF %%g NEQ fabricloader IF %%g NEQ minecraft IF %%g NEQ fabric IF %%g NEQ java IF %%g NEQ cloth-config IF %%g NEQ cloth-config2 IF %%g NEQ fabric-language-kotlin IF %%g NEQ iceberg IF %%g NEQ fabric-resource-loader-v0 IF %%g NEQ creativecore IF %%g NEQ architectury ECHO %%g>>univ-utils\allfabricdeps.txt
-        REM Below is a different way to do the above line - however it's slower.  If FINDSTR does not find one of the string values then it echos the entry to the txt file.
-        REM ECHO %%g | FINDSTR "fabricloader minecraft fabric java cloth-config cloth-config2 fabric-language-kotlin iceberg fabric-resource-loader-v0 creativecore architectury" >nul 2>&1 || ECHO %%g>>univ-utils\allfabricdeps.txt
-      )
+        IF %%g NEQ fabricloader IF %%g NEQ minecraft IF %%g NEQ fabric IF %%g NEQ java IF %%g NEQ cloth-config IF %%g NEQ cloth-config2 IF %%g NEQ fabric-language-kotlin IF %%g NEQ iceberg IF %%g NEQ fabric-resource-loader-v0 IF %%g NEQ creativecore IF %%g NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%g;"
+       )
     )
     REM If the depends string is found set FOUNDDEPENDS Y for discovery in the next loop iteration.
     IF !FOUNDDEPENDS!==N IF "!TEMP!" NEQ "!TEMP:;depends;=x!" SET FOUNDDEPENDS=Y
     REM Increases the integer value of JSONLINE - this variable is only used to determine if the JSON is the compact 1 line version or has multiple lines.
     SET /a JSONLINE+=1
-  )) 
+  ) ELSE (
+
+    REM IN CASE OF BEING A QUILT MOD - REPEAT THE POWERSHELL METHOD TO KEEP IT SIMPLE (BUT IS SLOW).
+    tar -xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json >nul 2>&1
+    IF !ERRORLEVEL!==0 (
+      REM Sets single quotes in file names to have a powershell escape character in front.
+      SET "THISFILENAME=mods\!SERVERMODS[%%f].file!"
+      SET "THISFILENAME=!THISFILENAME:'=`'!"
+
+      FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.id"') DO SET SERVERMODS[%%f].id=%%A
+      FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.minecraft.environment"') DO (
+        IF "%%A"=="client" IF "!SERVERMODS[%%f].id!" NEQ "modmenu" ( SET SERVERMODS[%%f].environ=C ) ELSE ( SET SERVERMODS[%%f].environ=N )
+      )
+      FOR /F %%B IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.depends.id"') DO (
+        IF %%B NEQ quilt_loader IF %%B NEQ minecraft IF %%B NEQ quilt_base IF %%B NEQ java IF %%B NEQ cloth-config IF %%B NEQ cloth-config2 IF %%B NEQ fabric-language-kotlin IF %%B NEQ iceberg IF %%B NEQ quilted_fabric_api IF %%B NEQ creativecore IF %%B NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%B;"
+      )
+    )
+  )
 )
+
 REM Goes to the no clients found message.  If any environment client mods were found this trigger variable will be Y instead.
 IF !FOUNDFABRICCLIENTS!==N GOTO :noclientsfabric
 
-:: Loops through each mod file/id array value to make a final array for mods with the clients environment which also don't have any matches for their mod id in the dependencies.
+ECHO: & ECHO   Cross-checking found client-side mods with all required dependency mods... .. . & ECHO:
+
+:: Makes a txt file to use for cross-referencing.
+:: Using a FINDSTR on the txt file vs looping through all variables is at least 2 orders of magnitude faster.  And combining together all .deps variables could be greater than the max variable character limit...
+ECHO fabricdeps>fabricdeps.txt
+FOR /L %%A IN (0,1,!SERVERMODSCOUNT!) DO (
+  IF "!SERVERMODS[%%A].deps!" NEQ ";" ECHO !SERVERMODS[%%A].deps!>>fabricdeps.txt
+)
+
+:: Loops through each modID and checks to see if its needed by another mod in the fabricdeps.txt.  Searching the modID surrounded in semicolons guarantees it only matches that exact ID.
 SET /a CLIENTSCOUNT=0
 FOR /L %%r IN (0,1,!SERVERMODSCOUNT!) DO (
+  REM If the mod is tagged as client enrironment
   IF !SERVERMODS[%%r].environ!==C (
-    FINDSTR "!SERVERMODS[%%r].id!" univ-utils\allfabricdeps.txt >nul
-    IF !ERRORLEVEL! NEQ 0 (
+
+    FINDSTR ";!SERVERMODS[%%r].id!;" "fabricdeps.txt" >nul 2>&1 || SET INCLUDE=Y
+
+    REM If set to include, add the mod to the list of mods that can be safely removed with no other mod requiring it as dependency.
+    IF !INCLUDE!==Y (
       SET "FABRICCLIENTS[!CLIENTSCOUNT!].file=!SERVERMODS[%%r].file!"
       SET "FABRICCLIENTS[!CLIENTSCOUNT!].id=!SERVERMODS[%%r].id!"
       SET /a CLIENTSCOUNT+=1
     )
   )
 )
-
-IF EXIST univ-utils\fabric.mod.json DEL univ-utils\fabric.mod.json >nul
-IF EXIST univ-utils\single-line-mod-deps.txt DEL univ-utils\single-line-mod-deps.txt >nul
-IF EXIST univ-utils\allfabricdeps.txt DEL univ-utils\allfabricdeps.txt >nul
+DEL fabricdeps.txt >nul 2>&1
 
   :: Prints report to user - echos all entries without the modID name = forge
   CLS
@@ -2449,36 +2469,15 @@ FOR /L %%p IN (0,1,!CLIENTSCOUNT!) DO (
 :: The equal sign is followed by 80 spaces and a doublequote
 SET "EightySpaces=                                                                                "
 FOR /L %%D IN (0,1,!CLIENTSCOUNT!) DO (
-	:: Append 80 spaces after the modID value
-	SET "Column=!FABRICCLIENTS[%%D].id!%EightySpaces%"
-	:: Chop at maximum column width, using a FOR loop as a kind of "super delayed" variable expansion
-	FOR %%W IN (!COLUMNWIDTH!) DO (
+  :: Append 80 spaces after the modID value
+  SET "Column=!FABRICCLIENTS[%%D].id!%EightySpaces%"
+  :: Chop at maximum column width, using a FOR loop as a kind of "super delayed" variable expansion
+  FOR %%W IN (!COLUMNWIDTH!) DO (
     SET "Column=!Column:~0,%%W!"
   )
   :: Finally echo the actual line for display using the now-length-formatted modID which is now the Column variable.
-	IF "!FABRICCLIENTS[%%D].file!" NEQ "" ECHO   !Column!  -   !FABRICCLIENTS[%%D].file!
+  IF "!FABRICCLIENTS[%%D].file!" NEQ "" ECHO   !Column!  -   !FABRICCLIENTS[%%D].file!
 )
-
-GOTO :continue1
-:: Function used above for determining max character length of any of the modIDs.
-:GetMaxStringLength
-
-:: Usage : GetMaxStringLength OutVariableName StringToBeMeasured
-:: Note  : OutVariable may already have an initial value
-SET StrTest=%~2
-:: Just add zero, in case the initial value is empty
-SET /A %1+=0
-:: Maximum length we will allow, modify appended spaces accordingly
-SET MaxLength=80
-IF %MaxLength% GTR !%1! (
-	FOR /L %%e IN (!%1!,1,%MaxLength%) DO (
-		IF NOT "!StrTest:~%%e!"=="" (
-			SET /A %1=%%e+1
-		)
-	)
-)
-GOTO:EOF
-:continue1
 
   ECHO    ------------------------------------------------------ & ECHO: & ECHO:
   ECHO   %green% *** DO YOU WANT TO MOVE THESE CLIENT MODS TO A DIFFERENT FOLDER FOR SAFE KEEPING? *** %blue%
@@ -2570,6 +2569,7 @@ ECHO   Minecraft server JAR not found - attempting to download from Mojang serve
 
 ECHO   Downloading Minecraft server JAR file... .. . & ECHO:
 
+:getmcmanifest
 :: Tests for whether to download missing manifest file
 SET GETMANIFEST=U
 IF NOT EXIST "univ-utils\version_manifest_v2.json" SET GETMANIFEST=Y
@@ -2584,13 +2584,14 @@ IF EXIST "univ-utils\version_manifest_v2.json" (
 )
 IF !GETMANIFEST!==Y (
   powershell -Command "(New-Object Net.WebClient).DownloadFile('https://launchermeta.mojang.com/mc/game/version_manifest_v2.json', 'univ-utils\version_manifest_v2.json')" >nul
-  :: If the download failed to get a file then try again
-  IF NOT EXIST "univ-utils\version_manifest_v2.json" (
+  :: If the download failed to get a file then try again.  Only do this part if settings file exists - skips this if this is the first time running with no settings.  Just fail gracefully.
+  IF NOT EXIST "univ-utils\version_manifest_v2.json" IF EXIST settings-universalator.txt (
     ECHO: & ECHO   OOPS - THE MINECRAFT VERSION MANIFEST FILE FAILED TO DOWNLOAD & ECHO: & ECHO   PRESS ANY KEY TO TRY DOWNLOADING AGAIN & ECHO: & ECHO:
     PAUSE
     GOTO :preparevanilla
   )
 )
+IF DEFINED SMODE IF !SMODE!==SETTINGS GOTO :backmcmanifest
 
 :: Tests if the version.json file needs to be obtained
 IF NOT EXIST "univ-utils\versions" MD "univ-utils\versions"
@@ -2602,8 +2603,8 @@ IF NOT EXIST "univ-utils\versions\!MINECRAFT!.json" (
 )
 
 :: Gets the JAR download URL and checksum value from the version.json file
-FOR /F "delims=" %%A IN ('powershell -Command "$data=(Get-Content -Raw -Path 'univ-utils/versions/!MINECRAFT!.json' | Out-String | ConvertFrom-Json); $data.downloads.server.url"') DO SET "MCJARURL=%%A"
-FOR /F "delims=" %%A IN ('powershell -Command "$data=(Get-Content -Raw -Path 'univ-utils/versions/!MINECRAFT!.json' | Out-String | ConvertFrom-Json); $data.downloads.server.sha1"') DO SET "MCJARCHECKSUM=%%A"
+FOR /F "delims=" %%A IN ('powershell -Command "$data=(Get-Content -Raw -Path '%HEREPOWERSHELL%\univ-utils/versions/!MINECRAFT!.json' | Out-String | ConvertFrom-Json); $data.downloads.server.url"') DO SET "MCJARURL=%%A"
+FOR /F "delims=" %%A IN ('powershell -Command "$data=(Get-Content -Raw -Path '%HEREPOWERSHELL%\univ-utils/versions/!MINECRAFT!.json' | Out-String | ConvertFrom-Json); $data.downloads.server.sha1"') DO SET "MCJARCHECKSUM=%%A"
 
 :: Downloads the vanilla Minecraft server JAR from the Mojang file server, using the obtained MCJARURL
 powershell -Command "(New-Object Net.WebClient).DownloadFile('!MCJARURL!', 'minecraft_server.!MINECRAFT!.jar')" >nul
@@ -2683,7 +2684,14 @@ IF /I !FABRICLAUNCH!==M GOTO :mainmenu
 ECHO: & ECHO   Launching... & ping -n 2 127.0.0.1 >nul & ECHO   Launching.. & ping -n 2 127.0.0.1 >nul & ECHO   Launching. & ECHO:
 
 IF !OVERRIDE!==Y SET "JAVAFILE=java"
-TITLE Universalator - !MINECRAFT! !MODLOADER!
+
+:: If the ARGS setting has not been changed by the user, use no default args for Java 17+.  Newer Java versions are much better at being self-optimizing than older versions.
+:: The user can still totally enter their own custom args if they want!  Or these with literally any tiny number change.
+If !JAVAVERSION! GEQ 17 (
+  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" SET "ARGS="
+)
+
+TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 
 :: Actually launch the server!
 IF /I !MODLOADER!==FABRIC (
@@ -2748,25 +2756,25 @@ ECHO: & ECHO:
 ECHO: & ECHO   ENTER YOUR SELECTION & ECHO      %green% 'DOWNLOAD' - Download UPnP Program %blue% & ECHO      %green% 'M' - Main Menu %blue%
 )
 
+IF NOT DEFINED PROTOCOL SET "PROTOCOL=TCP"
+
 IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
-ECHO: & ECHO   %yellow% MiniUPnP PROGRAM %blue% - %green% DOWNLOADED %blue%
+ECHO   %yellow% MiniUPnP PROGRAM %blue% - %green% DOWNLOADED %blue%
+ECHO   %yellow% PROTOCOL    %blue% -      %green% %PROTOCOL% %blue%
 IF !ISUPNPACTIVE!==N ECHO   %yellow% UPNP STATUS %blue% -      %red% NOT ACTIVATED: %blue% & ECHO                        %red% 'A' - ACTIVATE %yellow% OR %red% SET UP AND USE MANUAL NETWORK ROUTER PORT FORWARDING %blue% & ECHO:
 IF !ISUPNPACTIVE!==Y  ECHO   %yellow% UPNP STATUS %blue% - %green% ACTIVE - FORWARDING PORT %PORT% %blue% & ECHO:
 IF !SHOWIP!==Y ECHO                                                               %yellow% Local IP:port  %blue% - !LOCALIP!:%PORT%
 IF !SHOWIP!==Y ECHO                                                               %yellow% Public IP:port %blue% - !PUBLICIP!:%PORT%
 IF !SHOWIP!==N ECHO:
 IF !SHOWIP!==N ECHO:
-ECHO:
+ECHO    OPTIONS:
+ECHO   %green% TOGGLE - Toggle port forwarding between ^[TCP^], ^[TCP ^& UDP^], ^[UDP^] %blue% 
 ECHO   %green% CHECK - Check for a network router with UPnP enabled %blue% 
 IF !SHOWIP!==N ECHO   %green% SHOW  - Show your Local and Public IP addresses %blue% && ECHO:
 IF !SHOWIP!==Y ECHO   %green% HIDE  - Hide your Local and Public IP addresses %blue% && ECHO:
-ECHO   %green%                                       %blue%
 ECHO   %green% A - Activate UPnP Port Forwarding     %blue%
-ECHO   %green%                                       %blue%
 ECHO   %green% D - Deactivate UPnP Port Forwarding   %blue%
-ECHO   %green%                                       %blue%
 ECHO   %green% S - Status of port forwarding refresh %blue%
-ECHO   %green%                                       %blue%
 ECHO: & ECHO   %green% M - Main Menu %blue%
 ECHO: & ECHO   Enter your choice:
 )
@@ -2776,6 +2784,7 @@ SET /P "ASKUPNPMENU="
 IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
 IF /I !ASKUPNPMENU!==M GOTO :mainmenu
 IF /I !ASKUPNPMENU!==CHECK GOTO :upnpvalid
+IF /I !ASKUPNPMENU!==TOGGLE GOTO :toggle
 IF /I !ASKUPNPMENU!==A GOTO :upnpactivate
 IF /I !ASKUPNPMENU!==D GOTO :upnpdeactivate
 IF /I !ASKUPNPMENU!==S GOTO :upnpstatus
@@ -2787,7 +2796,7 @@ IF /I !ASKUPNPMENU!==HIDE (
   SET SHOWIP=N
   GOTO :upnpmenu
 )
-IF /I !ASKUPNPMENU! NEQ M IF /I !ASKUPNPMENU! NEQ CHECK IF /I !ASKUPNPMENU! NEQ A IF /I !ASKUPNPMENU! NEQ D IF /I !ASKUPNPMENU! NEQ S GOTO :upnpmenu
+IF /I !ASKUPNPMENU! NEQ M IF /I !ASKUPNPMENU! NEQ CHECK IF /I !ASKUPNPMENU! NEQ TOGGLE IF /I !ASKUPNPMENU! NEQ A IF /I !ASKUPNPMENU! NEQ D IF /I !ASKUPNPMENU! NEQ S GOTO :upnpmenu
 )
 
 IF NOT EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
@@ -2795,6 +2804,15 @@ IF /I !ASKUPNPMENU!==DOWNLOAD GOTO :upnpdownload
 IF /I !ASKUPNPMENU!==M GOTO :mainmenu
 IF /I !ASKUPNPMENU! NEQ DOWNLOAD IF /I !ASKUPNPMENU! NEQ M GOTO :upnpmenu
 )
+
+:: Switches between protocol types to forward
+:toggle
+IF !PROTOCOL!==TCP ( SET "PROTOCOL=TCP ^& UDP" ) ELSE (
+  IF "!PROTOCOL!"=="TCP ^& UDP" ( SET "PROTOCOL=UDP" ) ELSE (
+    SET "PROTOCOL=TCP"
+  )
+)
+GOTO :upnpmenu
 
 :: BEGIN UPNP LOOK FOR VALID & ENABLED UPNP ROUTER
 :upnpvalid
@@ -2848,56 +2866,68 @@ SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "ENABLEUPNP="
 IF /I !ENABLEUPNP! NEQ N IF /I !ENABLEUPNP! NEQ Y GOTO :upnpactivate
 IF /I !ENABLEUPNP!==N GOTO :upnpmenu
-SET /a CYCLE=1
-SET ACTIVATING=Y
-ECHO: & ECHO   %yellow%  Attempting to activate UPnP port forwarding ... .. . %blue% & ECHO:
-:activatecycle
-:: Tries several different command methods to activate the port forward using miniUPnP.  Each attempt then goes to get checked for success in the upnpstatus section.
-IF !CYCLE!==1 (
-  FOR /F "delims=" %%A IN ('univ-utils\miniupnp\upnpc-static.exe -a !LOCALIP! %PORT% %PORT% TCP 0') DO (
-    SET TEMPM=%%A
-    IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" (
-      ECHO: & ECHO   %red% UPNP ACTIVATION NOT SUCCESSFUL - IT LOOKS LIKE PORT SELECTION IS ALREADY IN USE %blue%
-      ECHO: & ECHO   %yellow%  TRY CLOSING ANY OLD SERVER WINDOWS OR BACKGROUND PROCESSES / RESTART COMPUTER / RESTART NETWORK ROUTER & ECHO:
-      PAUSE
-      GOTO :upnpmenu
-    )
-  )
-  SET /a CYCLE+=1
-  GOTO :activatestatus
-)
-IF !CYCLE!==2 (
-  FOR /F "delims=" %%A IN ('univ-utils\miniupnp\upnpc-static.exe -r %PORT% TCP') DO (
-      SET TEMPM=%%A
-    IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" (
-      ECHO: & ECHO   %red% UPNP ACTIVATION NOT SUCCESSFUL - IT LOOKS LIKE PORT SELECTION IS ALREADY IN USE %blue%
-      ECHO: & ECHO   %yellow%  TRY CLOSING ANY OLD SERVER WINDOWS OR BACKGROUND PROCESSES / RESTART COMPUTER / RESTART NETWORK ROUTER & ECHO:
-      PAUSE
-      GOTO :upnpmenu
 
-    )
-  )
-  SET /a CYCLE+=1
-  GOTO :activatestatus
-)
-IF !CYCLE!==3 (
-  FOR /F "delims=" %%A IN ('univ-utils\miniupnp\upnpc-static.exe -a %PUBLICIP% %PORT% %PORT% TCP') DO (
-      SET TEMPM=%%A
-    IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" (
-      ECHO: & ECHO   %red% UPNP ACTIVATION NOT SUCCESSFUL - IT LOOKS LIKE PORT SELECTION IS ALREADY IN USE %blue%
-      ECHO: & ECHO   %yellow%  TRY CLOSING ANY OLD SERVER WINDOWS OR BACKGROUND PROCESSES / RESTART COMPUTER / RESTART NETWORK ROUTER & ECHO:
-      PAUSE
-      GOTO :upnpmenu
+ECHO: & ECHO   %yellow%  Attempting to activate UPnP port forwarding ... .. . %blue% & ECHO: & ECHO   Please wait... .. .
 
+IF "!PROTOCOL!"=="TCP" SET "PROTTRY=TCP"
+IF "!PROTOCOL!"=="TCP ^& UDP" SET "PROTTRY=TCP UDP"
+IF "!PROTOCOL!"=="UDP" SET "PROTTRY=UDP"
+
+SET /a WHAT=0
+:: Cycles through either TCP, UDP, or both of them
+:: If at any time a port conflict is found just GOTO an issue message.
+FOR %%Z IN (!PROTTRY!) DO (
+  SET ISUPNPACTIVE=IDK
+  FOR /L %%A IN (0,1,2) DO (
+    REM Tries each method of using the miniupnp program to active.  Different routers could require different activation methods.
+    IF %%A==0 IF !ISUPNPACTIVE! NEQ Y (
+      FOR /F "delims=" %%B IN ('univ-utils\miniupnp\upnpc-static.exe -a !LOCALIP! !PORT! !PORT! %%Z 0') DO (
+        SET TEMPM=%%B
+        IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" GOTO :portconflict
+      )
+    )
+    IF %%A==1 IF !ISUPNPACTIVE! NEQ Y (
+      FOR /F "delims=" %%A IN ('univ-utils\miniupnp\upnpc-static.exe -r !PORT! %%Z') DO (
+        SET TEMPM=%%B
+        IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" GOTO :portconflict
+      )
+    )
+    IF %%A==2 IF !ISUPNPACTIVE! NEQ Y (
+    FOR /F "delims=" %%A IN ('univ-utils\miniupnp\upnpc-static.exe -a !PUBLICIP! !PORT! !PORT! %%Z') DO (
+        SET TEMPM=%%B
+        IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" GOTO :portconflict
+      )
+    )
+    REM Checks to see if the last method tried above was successful
+    IF !ISUPNPACTIVE! NEQ Y FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
+      SET UPNPSTATUS=%%E
+      REM If the port number is found on a line.
+      IF "!UPNPSTATUS!" NEQ "!UPNPSTATUS:!PORT!=PORT!" (
+        REM If the protocol type being activation attempted is found.
+        ECHO "!UPNPSTATUS!" | FINDSTR "%%Z" >nul && SET ISUPNPACTIVE=Y
+      )
     )
   )
-  SET /a CYCLE+=1
-  GOTO :activatestatus
+  REM Sets a dummy variable for cases where both protocols are checked.
+  REM If either is success bumps value up, if either fails then it bumps the value down
+  IF !ISUPNPACTIVE!==Y ( SET /a WHAT+=1 ) ELSE ( SET /a WHAT-=1 )
 )
-SET ACTIVATING=N
-:: Activating if reaching here has failed - run a scan of the first activation method to try and produce an error code to read
-ECHO:
-ECHO   %red% SORRY - The activation of UPnP port forwarding was not detected to have worked. %blue% & ECHO: & ECHO:
+
+IF !WHAT! GTR 0 (
+  ECHO: & ECHO   %green% ACTIVE - Port forwarding using UPnP is active for port %PORT% %blue% & ECHO: & ECHO:
+  PAUSE
+  GOTO :upnpmenu
+) ELSE (
+  SET ISUPNPACTIVE=N
+  ECHO: & ECHO   %red% SORRY - The activation of UPnP port forwarding was not detected to have worked. %blue% & ECHO: & ECHO:
+  PAUSE
+  GOTO :upnpmenu
+)
+
+:: If a port conflict was detected in the activate loop
+:portconflict
+ECHO: & ECHO   %red% UPNP ACTIVATION NOT SUCCESSFUL - IT LOOKS LIKE PORT SELECTION IS ALREADY IN USE %blue%
+ECHO: & ECHO   %yellow%  TRY CLOSING ANY OLD SERVER WINDOWS OR BACKGROUND PROCESSES / RESTART COMPUTER / RESTART NETWORK ROUTER & ECHO:
 PAUSE
 GOTO :upnpmenu
 
@@ -2908,8 +2938,7 @@ GOTO :upnpmenu
 :: Loops through the lines in the -l flag to list MiniUPNP active ports - looks for a line that is different with itself compated to itself but
 :: trying to replace any string inside that matches the port number with a random different string - in this case 'PORT' for no real reason.
 :: Neat huh?  Is proabably faster than piping an echo of the variables to findstr and then checking errorlevels (other method to do this).
-ECHO   %red% Checking Status of UPnP Port Forward ... ... ... %blue% & ECHO:
-:activatestatus
+ECHO   %red% Checking Status of UPnP Port Forward ... ... ... %blue% & ECHO: & ECHO   Please wait... .. .
 SET ISUPNPACTIVE=N
 FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
     SET UPNPSTATUS=%%E
@@ -2917,19 +2946,14 @@ FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
 )
 :: IF detected port is active then reset var set if sent here by activating code, then either way go back to upnp menu.
 IF !ISUPNPACTIVE!==Y (
-  IF DEFINED ACTIVATING SET ACTIVATING=N
-  ECHO:
-  ECHO   %green% ACTIVE - Port forwarding using UPnP is active for port %PORT% %blue%
-  ECHO: & ECHO:
+  ECHO: & ECHO   %green% ACTIVE - Port forwarding using UPnP is active for port %PORT% %blue% & ECHO: & ECHO:
+  PAUSE
+  GOTO :upnpmenu
+) ELSE (
+  ECHO   %red% NOT ACTIVE - Port forwarding using UPnP is not active for port %PORT% %blue% & ECHO:
   PAUSE
   GOTO :upnpmenu
 )
-:: if script was sent here by the activating section and port forward still not active - goes back there.
-IF !ISUPNPACTIVE!==N IF DEFINED ACTIVATING IF !ACTIVATING!==Y GOTO :activatecycle
-:: Otherwise goes back to upnpmenu
-IF !ISUPNPACTIVE!==N ECHO   %red% NOT ACTIVE - Port forwarding using UPnP is not active for port %PORT% %blue% & ECHO:
-PAUSE
-GOTO :upnpmenu
 :: END UPNP CHECK STATUS
 
 :: BEGIN UPNP DEACTIVATE AND CHECK STATUS AFTER
@@ -2952,8 +2976,12 @@ IF /I !DEACTIVATEUPNP! NEQ Y IF /I !DEACTIVATEUPNP! NEQ N GOTO :upnpdeactivate
 IF /I !DEACTIVATEUPNP!==N GOTO :upnpmenu
 :: Deactivates the port connection used by the MiniUPNP program.
 IF /I !DEACTIVATEUPNP!==Y (
-    ECHO: & ECHO   %yellow% Attempting to deactivate UPnP port forwarding ... .. . %blue%
+    ECHO: & ECHO   %yellow% Attempting to deactivate UPnP port forwarding ... .. . %blue% & ECHO: & ECHO   Please wait... .. .
+
+    REM Tries to deactive for both TCP and UDP always.
     univ-utils\miniupnp\upnpc-static.exe -d %PORT% TCP >nul
+    univ-utils\miniupnp\upnpc-static.exe -d %PORT% UDP >nul
+
     SET ISUPNPACTIVE=N
     FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
         SET UPNPSTATUS=%%E
@@ -3299,7 +3327,7 @@ ECHO: & ECHO  %yellow% SERVER PROPERTIES - SERVER PROPERTIES %blue% & ECHO:
 :: Prints to screen the desired server properties to display.  
 set /a idk=0
 FOR /F tokens^=^1^,^2^ delims^=^= %%A IN (server.properties) DO (
-  ECHO %%A | FINDSTR # >nul || ECHO spawn-protection max-tick-time enforce-whitelist difficulty simulation-distance level-type enable-command-block max-players function-permission-level server-port level-name view-distance white-list level-seed motd | FINDSTR "%%A" >nul && (
+  ECHO %%A | FINDSTR # >nul || ECHO spawn-protection max-tick-time enforce-whitelist difficulty simulation-distance level-type enable-command-block max-players function-permission-level server-port level-name view-distance white-list level-seed motd region-file-compression | FINDSTR "%%A" >nul && (
     SET /a idk+=1
     SET PROP[!idk!]=%%A
     SET VAL[!idk!]=%%B
@@ -3325,25 +3353,6 @@ FOR /L %%D IN (1,1,!idk!) DO (
 	IF %%D LEQ 9 ECHO   ^[%%D^]  !Column!  -   !VAL[%%D]!
 	IF %%D GEQ 10 ECHO   ^[%%D^] !Column!  -   !VAL[%%D]!
 )
-GOTO :continue3
-:: Function used above for determining max character length of any of the modIDs.
-:GetMaxStringLength
-:: Usage : GetMaxStringLength OutVariableName StringToBeMeasured
-:: Note  : OutVariable may already have an initial value
-SET StrTest=%~2
-:: Just add zero, in case the initial value is empty
-SET /A %1+=0
-:: Maximum length we will allow, modify appended spaces accordingly
-SET MaxLength=80
-IF %MaxLength% GTR !%1! (
-	FOR /L %%e IN (!%1!,1,%MaxLength%) DO (
-		IF NOT "!StrTest:~%%e!"=="" (
-			SET /A %1=%%e+1
-		)
-	)
-)
-GOTO:EOF
-:continue3
 
 ECHO: & ECHO  %yellow% Current values of some select server properties.   %blue%
 ECHO   For full range of properties edit the file 'server.properties' manually with any text editor.
@@ -3360,8 +3369,14 @@ IF DEFINED var ECHO: & ECHO   %red% Invalid entry - must enter a valid number op
 IF NOT DEFINED var (
   IF %entry1% GTR !idk! ECHO   %red% Invalid entry - number is greater than available options! %blue% & ECHO: & PAUSE & GOTO :editserverprops
   ECHO:
-  SET /P SCRATCH="%blue% %green% Enter new value for '!PROP[%entry1%]!': %blue% " <nul
-  SET /P entry2=
+  IF "!PROP[%entry1%]!"=="region-file-compression" (
+    IF !VAL[%entry1%]!==deflate SET entry2=lz4 & ECHO   %yellow% LZ4 compression method set - this will take up more hard drive space for the world folder, %blue% & ECHO   %yellow% but have faster access time performance^^! %blue% & ECHO: & PAUSE
+    IF !VAL[%entry1%]!==lz4 SET entry2=deflate
+    REM Could nest more IF ELSE to make more toggle entries.
+  ) ELSE (
+    SET /P SCRATCH="%blue% %green% Enter new value for '!PROP[%entry1%]!': %blue% " <nul
+    SET /P entry2=
+  )
 
   :: Uses the serverpropsedit function to edit the server.properties file
   CALL :serverpropsedit !PROP[%entry1%]! !entry2!
@@ -3533,3 +3548,40 @@ IF !changedvalue!==Y (
 )
 endlocal
 GOTO:EOF
+
+
+:: FUNCTION USED FOR DETERMINING MAX CHARACTER LENGTH
+:GetMaxStringLength
+
+:: Usage :GetMaxStringLength <OutVariableName> <StringToBeMeasured>
+:: Note - OutVariableName may already have an initial value
+SET StrTest=%~2
+:: Just add zero, in case the initial value is empty
+SET /A %1+=0
+:: Maximum length we will allow, modify appended spaces accordingly
+SET MaxLength=80
+IF %MaxLength% GTR !%1! (
+	FOR /L %%e IN (!%1!,1,%MaxLength%) DO (
+		IF NOT "!StrTest:~%%e!"=="" (
+			SET /A %1=%%e+1
+		)
+	)
+)
+GOTO:EOF
+
+
+:: FUNCTION TO REPLACE STRINGS WITHIN VARIABLE STRINGS - hot stuff!
+:: l_replace function - reworked to allow any variable name passed to alter.  Needs 4 paramters passed.
+
+:: 4 Paramters:     <variable to edit> <string to find> <replacement string> <variable to edit name>
+:: EXAMPLE:         CALL :l_replace_ng "!TEMP!" "=" ";" "TEMP"
+
+:: 1= string to edit / 2= find string / 3= replace string / 4= passed variable name
+:l_replace
+SET "%~4=x%~1x"
+:l_replaceloop
+FOR /f "delims=%~2 tokens=1*" %%x IN ("!%~4!") DO (
+IF "%%y"=="" SET "%~4=!%~4:~1,-1!" & EXIT /b
+SET "%~4=%%x%~3%%y"
+)
+GOTO :l_replaceloop
