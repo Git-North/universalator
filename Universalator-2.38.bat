@@ -352,16 +352,13 @@ IF DEFINED FOUNDREDIR (
 )
 :skiphostscheck
 
-IF EXIST settings-universalator.txt (
-  :: Reads off the contents of the settings file if it's present, to set current setting values.  Doing it this way avoids needing to rename the file to a .bat or .cmd to perform a CALL.
-  FOR /F "delims=" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" %%A
-)
 IF /I !MODLOADER!==FORGE SET FORGE=!MODLOADERVERSION!
 IF /I !MODLOADER!==NEOFORGE SET NEOFORGE=!MODLOADERVERSION!
 IF /I !MODLOADER!==FABRIC SET FABRICLOADER=!MODLOADERVERSION!
 IF /I !MODLOADER!==QUILT SET QUILTLOADER=!MODLOADERVERSION!
 IF DEFINED MAXRAMGIGS SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
 SET OVERRIDE=N
+
 :: END GENERAL PRE-RUN ITEMS
 
 :: BEGIN CHECKING server.properties FILE FOR IP ENTRY AND OTHER
@@ -407,6 +404,9 @@ IF DEFINED IPLINE IF !IS_IP_ENTERED!==Y (
     ECHO:
     SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
     SET /P "CHOOSE_IP="
+    :: Trims off any trailing spaces
+    IF "!CHOOSE_IP:~-1!"==" " CALL :trim "!CHOOSE_IP!" CHOOSE_IP
+    
 )
 IF DEFINED IPLINE IF !IS_IP_ENTERED!==Y (
     IF /I !CHOOSE_IP! NEQ CORRECT IF /I !CHOOSE_IP! NEQ IGNORE GOTO :confirmip
@@ -525,6 +525,9 @@ GOTO :skipportclear
   ECHO       %yellow% Enter 'Q' %blue% to close the script program if you'd like to try and solve the issue on your own. & ECHO:
   SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
   SET /P "KILLIT="
+  :: Trims off any trailing spaces
+  IF "!KILLIT:~-1!"==" " CALL :trim "!KILLIT!" KILLIT
+
   IF /I !KILLIT! NEQ KILL IF /I !KILLIT! NEQ Q GOTO :portwarning
   IF /I !KILLIT!==Q (
     PAUSE & EXIT [\B]
@@ -597,7 +600,8 @@ IF NOT EXIST settings-universalator.txt GOTO :startover
 :mainmenu
 
 TITLE Universalator %UNIV_VERSION%
-Rem ECHO !ARGS!
+
+:: The settings file should always exist if we get here, but check anyways.
 IF EXIST settings-universalator.txt (
   :: Reads off the contents of the settings file if it's present, to set current setting values.  Doing it this way avoids needing to rename the file to a .bat or .cmd to perform a CALL.
   FOR /F "delims=" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" (
@@ -615,6 +619,8 @@ IF EXIST settings-universalator.txt (
   IF /I !MODLOADER!==FABRIC SET FABRICLOADER=!MODLOADERVERSION!
   IF /I !MODLOADER!==QUILT SET QUILTLOADER=!MODLOADERVERSION!
 )
+
+:: Sets some things with default values in case they don't exist yet
 IF NOT EXIST univ-utils MD univ-utils
 IF NOT DEFINED PROTOCOL SET PROTOCOL=TCP
 IF DEFINED PROTOCOL IF !PROTOCOL! NEQ TCP IF NOT EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
@@ -622,9 +628,10 @@ IF DEFINED PROTOCOL IF !PROTOCOL! NEQ TCP IF NOT EXIST "%HERE%\univ-utils\Portfo
   CALL :univ_settings_edit PROTOCOL TCP
 )
 
+:: RESTARTCOUNT for auto rebooting is reset to 0 if the script gets back here after launching before.
 SET /a RESTARTCOUNT=0
-SET "MAINMENU="
 
+SET "MAINMENU="
 CLS
 ECHO:%yellow%
 ECHO ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -655,8 +662,6 @@ IF DEFINED PORT IF !USEPORTFORWARDED!==N ECHO   %yellow% CURRENT PORT SET %blue%
 IF !USEPORTFORWARDED!==Y IF DEFINED PORT IF DEFINED PROTOCOL IF "!PROTOCOL!"=="TCP" ECHO   %yellow% CURRENT PORT SET %blue%  TCP !PORT!
 IF !USEPORTFORWARDED!==Y IF DEFINED PORT IF DEFINED PORTUDP IF DEFINED PROTOCOL IF "!PROTOCOL!"=="BOTH" ECHO   %yellow% CURRENT PORTS SET %blue%  TCP !PORT! / UDP !PORTUDP!
 IF !USEPORTFORWARDED!==Y IF DEFINED PORTUDP IF DEFINED PROTOCOL IF "!PROTOCOL!"=="UDP" ECHO   %yellow% CURRENT PORT SET %blue%  UDP !PORTUDP!
-
-
 ECHO                                                             %green% MENU OPTIONS %blue%
 IF DEFINED USEPORTFORWARDED IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
   IF !USEPORTFORWARDED!==Y ECHO   %yellow% UPNP PORT FORWARDING %blue% - %green% ENABLED %blue%
@@ -672,6 +677,7 @@ ECHO                                                        %green% A %blue%    
 :allcommandsentry
 SET /P SCRATCH="%blue%  %green% ENTER A MENU OPTION:%blue% " <nul
 SET /P "MAINMENU="
+IF "!MAINMENU:~-1!"==" " CALL :trim "!MAINMENU!" MAINMENU
 
 IF /I !MAINMENU!==Q COLOR 07 & CLS & EXIT [\B]
 IF /I !MAINMENU!==UPNP GOTO :upnpmenu
@@ -745,6 +751,8 @@ ECHO   %yellow% ENTER THE MINECRAFT VERSION %blue%
 ECHO: & ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P MINECRAFT=
+:: Trims off any trailing spaces
+IF "!MINECRAFT:~-1!"==" " CALL :trim "!MINECRAFT!" MINECRAFT
 
 :: Goes to do the check to get a game manifest from Mojang.
 SET "SMODE=SETTINGS"
@@ -807,6 +815,8 @@ ECHO   %yellow% ENTER THE MODLOADER TYPE %blue%
 ECHO: & ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "MODLOADER="
+:: Trims off any trailing spaces
+IF "!MODLOADER:~-1!"==" " CALL :trim "!MODLOADER!" MODLOADER
 
 :: Corrects entry to be all capital letters if not already entered by user.
 IF /I !MODLOADER!==FORGE SET MODLOADER=FORGE
@@ -957,8 +967,8 @@ IF /I !ASKFABRICLOADER!==N (
   SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
   SET /P FABRICLOADER=
 )
-:: Checks if any blank spaces were in the entry.
-IF "!FABRICLOADER!" NEQ "!FABRICLOADER: =!" GOTO :redofabricloader
+:: Trims off any trailing spaces
+IF "!FABRICLOADER:~-1!"==" " CALL :trim "!FABRICLOADER!" FABRICLOADER
 
 :: If custom Fabric Loader was entered check on the maven XML file that it is a valid version
 FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!'); $data.metadata.versioning.versions.version"') DO (
@@ -1003,9 +1013,8 @@ IF /I !ASKQUILTLOADER!==N (
   SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
   SET /P QUILTLOADER=
 )
-
-:: Checks if any blank spaces were in the entry.
-IF "!QUILTLOADER!" NEQ "!QUILTLOADER: =!" GOTO :redofabricloader
+:: Trims off any trailing spaces
+IF "!QUILTLOADER:~-1!"==" " CALL :trim "!QUILTLOADER!" QUILTLOADER
 
 :: If custom Quilt Loader was entered check on the maven XML file that it is a valid version
 FOR /F %%A IN ('powershell -Command "$data = [xml](Get-Content -Path '%HEREPOWERSHELL%\univ-utils\!METADATAFILE!'); $data.metadata.versioning.versions.version"') DO (
@@ -1145,8 +1154,8 @@ IF /I !FROGEENTRY!==Y (
   IF !MODLOADER!==NEOFORGE SET NEOFORGE=!NEWESTNEOFORGE!
   GOTO :setjava
 )
-:: Checks if any blank spaces were in the entry.
-IF "!FROGEENTRY!" NEQ "!FROGEENTRY: =!" GOTO :redoenterforge
+:: Trims off any trailing spaces
+IF "!FROGEENTRY:~-1!"==" " CALL :trim "!FROGEENTRY!" FROGEENTRY
 
 :: Checks to see if there were any a-z or A-Z characters in the entry - but only for Forge because Neoforge has some versions with -beta in the name now.
 ECHO:
@@ -1244,6 +1253,9 @@ ECHO  %yellow% ENTER JAVA VERSION TO LAUNCH THE SERVER WITH %blue%
 ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P JAVAVERSION=
+:: Trims off any trailing spaces
+IF "!JAVAVERSION:~-1!"==" " CALL :trim "!JAVAVERSION!" JAVAVERSION
+
 IF !MCMAJOR! LSS 16 IF !JAVAVERSION! NEQ 8 GOTO :javaselect
 IF !MCMAJOR! EQU 16 IF !MCMINOR! LEQ 4 IF !JAVAVERSION! NEQ 8 GOTO :javaselect
 IF !MCMAJOR! EQU 16 IF !MCMINOR! EQU 5 IF !JAVAVERSION! NEQ 8 IF !JAVAVERSION! NEQ 11 GOTO :javaselect
@@ -1299,9 +1311,10 @@ FOR /F "tokens=4,5 delims=, " %%E IN ("!RAWFREERAM!") DO (
   ECHO: & ECHO:
   SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
   SET /P MAXRAMGIGS=
+:: Trims off any trailing spaces
+IF "!MAXRAMGIGS:~-1!"==" " CALL :trim "!MAXRAMGIGS!" MAXRAMGIGS
 
-:: Checks if there are any spaces or decimal points in the entry
-IF "!MAXRAMGIGS!" NEQ "!MAXRAMGIGS: =!" GOTO :badramentry
+:: Checks if there are any decimal points in the entry
 IF "!MAXRAMGIGS!" NEQ "!MAXRAMGIGS:.=!" GOTO :badramentry
 
 :: Tests to see if the entered value is an integer or not.  If it is a string and not an integer (letters etc) - trying to set TEST1 as an integer with SET /a will fail.
@@ -1709,6 +1722,8 @@ IF !GETEULA!==N GOTO :skipeula
   ECHO     %yellow% ENTER YOUR RESPONSE %blue% & ECHO:
   SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
   SET /P RESPONSE=
+  :: Trims off any trailing spaces
+  IF "!RESPONSE:~-1!"==" " CALL :trim "!RESPONSE!" RESPONSE
 
   IF /I !RESPONSE!==AGREE (
     ECHO:
@@ -2887,6 +2902,9 @@ ECHO: & ECHO   Enter your choice:
 ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "ASKUPNPMENU="
+:: Trims off any trailing spaces
+IF "!ASKUPNPMENU:~-1!"==" " CALL :trim "!ASKUPNPMENU!" ASKUPNPMENU
+
 IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
 IF /I !ASKUPNPMENU!==M GOTO :mainmenu
 IF /I !ASKUPNPMENU!==CHECK GOTO :upnpvalid
@@ -2945,6 +2963,8 @@ IF %DOTCP%==Y (
   ECHO   %yellow% OR 'default' TO USE THE DEFAULT MINECRAFT PORT 25565 & ECHO:
   SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
   SET /P "PORT2="
+  :: Trims off any trailing spaces
+  IF "!PORT2:~-1!"==" " CALL :trim "!PORT2!" PORT2
 
   IF /I "!PORT2!"=="default" (
     SET "PORT=25565"
@@ -3002,6 +3022,8 @@ IF %DOUDP%==Y (
       ECHO   %yellow% OR - enter 'default' to use 24454 %blue% & ECHO:
       SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
       SET /P "PORT2="
+      :: Trims off any trailing spaces
+      IF "!PORT2:~-1!"==" " CALL :trim "!PORT2!" PORT2
 
       IF /I "!PORT2!"=="default" (
         SET "PORTUDP=24454"
@@ -3042,6 +3064,9 @@ IF %DOUDP%==Y (
     ECHO: & ECHO   Enter a port number to use for UDP & ECHO:
     SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
     SET /P "PORT2="
+    :: Trims off any trailing spaces
+    IF "!PORT2:~-1!"==" " CALL :trim "!PORT2!" PORT2
+
     FOR %%A IN (!PORT2!) DO ( SET /a "PORT2=%%A" 1>nul 2>nul || (
       REM If setting PORT2 to be an integer fails then they didn't enter only an integer
       ECHO   %red% OOPS %blue% - You did not enter an integer number.  Try again. & ECHO:
@@ -3452,6 +3477,8 @@ ECHO:
 ECHO:
 SET /P SCRATCH="%blue% %green% ENTER new port number, 'default', or 'M' for main menu): %blue% " <nul
 SET /P newport=
+:: Trims off any trailing spaces
+IF "!newport:~-1!"==" " CALL :trim "!newport!" newport
 
 IF /I !newport!==M GOTO :mainmenu
 IF /I !newport!==default (
@@ -3529,7 +3556,10 @@ ECHO   ----------------------------------- & ECHO:
 ECHO  %yellow% Enter a property number to edit, or 'M' for main menu. %blue%%red% Be sure values are valid^^! %blue% & ECHO:
 SET /P SCRATCH="%blue% %green% ENTRY (or 'M' for main menu): %blue% " <nul
 SET /P entry1=
-IF /I %entry1%==M GOTO :mainmenu
+:: Trims off any trailing spaces
+IF "!entry1:~-1!"==" " CALL :trim "!entry1!" entry1
+
+IF /I !entry1!==M GOTO :mainmenu
 
 :: Evaluates if the entry was a number.  Unsets var and then tries to assign it to the result of the FOR delims.  If it is not defined then it is a number.  If it is defined then it is not a number
 SET "var=" & FOR /f "delims=0123456789" %%i IN ("%entry1%") DO SET var=%%i
@@ -3545,6 +3575,8 @@ IF NOT DEFINED var (
   ) ELSE (
     SET /P SCRATCH="%blue% %green% Enter new value for '!PROP[%entry1%]!': %blue% " <nul
     SET /P entry2=
+    :: Trims off any trailing spaces
+    IF "!entry2:~-1!"==" " CALL :trim "!entry2!" entry1
   )
 
   :: Uses the serverpropsedit function to edit the server.properties file
