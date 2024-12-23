@@ -437,11 +437,52 @@ IF DEFINED IPLINE IF /I !CHOOSE_IP!==CORRECT (
 :skipserverproperties
 :: END CHECKING server.properties FILE FOR IP ENTRY AND OTHER
 
-:: BEGIN PORT CHECKING
+:: BEGIN PORT STUFF CHECKING
 
-:: Sets which port to use for the check
-FOR /F "tokens=2 delims==" %%A IN ('findstr server-port server.properties') DO SET PORT=%%A
-IF NOT DEFINED PORT SET PORT=25565
+:: Tries to find server.properties file port setting
+IF EXIST server.properties (
+  FINDSTR server-port server.properties 1>nul 2>nul && ( FOR /F "tokens=2 delims==" %%A IN ('FINDSTR server-port server.properties') DO SET CONFIGPORT=%%A )
+)
+:: If Universalator config isn't present
+IF NOT EXIST settings-universalator.txt (
+  SET PORT=25565
+  SET PORTUDP=24454
+)
+
+:: If Universalator config present find stored port numbers and set
+IF EXIST settings-universalator.txt (
+  FOR /F "delims=" %%A IN ('type settings-universalator.txt') DO (
+    SET "TEMP=%%A"
+    
+    IF "!TEMP:SET PORT=x!" NEQ "!TEMP!" ( 
+      REM Trims off trailing spaces using replacement
+      SET TEMP=!TEMP:SET PORT=SET;PORT!
+      SET TEMP=!TEMP: =!
+      SET TEMP=!TEMP:SET;PORT=SET PORT!
+      REM This should be a direct SET for the PORT variable
+      !TEMP!
+    )
+      IF "!TEMP:SET PORTUDP=x!" NEQ "!TEMP!" ( 
+      REM Trims off trailing spaces using replacement
+      SET TEMP=!TEMP:SET PORTUDP=SET;PORTUDP!
+      SET TEMP=!TEMP: =!
+      SET TEMP=!TEMP:SET;PORTUDP=SET PORTUDP!
+      REM This should be a direct SET for the PORTUDP variable
+      !TEMP!
+    )
+  )
+  IF NOT DEFINED PORT SET PORT=25565
+  IF NOT DEFINED PORTUDP SET PORTUDP=24454
+)
+
+:: IF server.properties exists and universalator settings exists, but no sever-port in server.properties
+IF EXIST server.properties IF NOT DEFINED CONFIGPORT ECHO server-port=!PORT!>>server.properties
+
+:: If the server.properties port number isn't what's in the Universalator config - edit server.properties to match
+IF EXIST server.properties IF DEFINED CONFIGPORT IF !CONFIGPORT! NEQ !PORT! (
+  CALL :serverpropsedit server-port !PORT!
+)
+
 
 :: Checks to see if the port is set to some low possibly conflicting numbered port
 IF %PORT% LSS 10000 (
@@ -509,7 +550,7 @@ IF %ERRORLEVEL%==1 (
 :: Below line is purely done to guarantee that the current ERRORLEVEL is reset to 0
 :skipportclear
 ver > nul
-:: END PORT CHECKING
+:: END PORT STUFF CHECKING
 
 :: BEGIN PUBLIC IP DETECTION
 
@@ -522,24 +563,12 @@ IF NOT DEFINED PUBLICIP SET "PUBLICIP=NOT DETECTED"
 
 :: BEGIN LOCAL IPV4 ADDRESS DETECTION
 
-:: If file present (upnp port forwarding = loaded') check to see if port forwarding is activated or not using it.
-:: This is to ensure that whichever type of connection's address that UPnP may be using is used (wifi IP vs ethernet IP, etc.)
-IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
-  SET ISUPNPACTIVE=N
-  FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
-    SET CHECKUPNPSTATUS=%%E
-    IF "!CHECKUPNPSTATUS!" NEQ "!CHECKUPNPSTATUS:%PORT%=PORT!" SET ISUPNPACTIVE=Y
-    IF "!CHECKUPNPSTATUS!" NEQ "!CHECKUPNPSTATUS:Local LAN ip address=replace!" SET LANLINE=%%E
-  )
-  FOR /F "tokens=5 delims=: " %%T IN ("!LANLINE!") DO SET LOCALIP=%%T
-)
-
-:: If no UPnP setting of LOCALIP was done - then use ipconfig to get the local IP address
+REM Use ipconfig to get the local IP address
 IF NOT DEFINED LOCALIP (
   FOR /F "tokens=1,2 delims=:" %%G IN ('ipconfig') DO (
     SET "LOOKFORIPV4=%%G"
-    :: If ethernet and WiFi are both active then the first entry recorded will be ethernet which is probably preferred
-    :: Ethernet is listed first always in ipconfig - so if LOCALIP becomes defined the loop gets exited by going to the exitlocalipset label
+    REM If ethernet and WiFi are both active then the first entry recorded will be ethernet which is probably preferred
+    REM Ethernet is listed first always in ipconfig - so if LOCALIP becomes defined the loop gets exited by going to the exitlocalipset label
     IF "!LOOKFORIPV4!" NEQ "!LOOKFORIPV4:IPv4 Address=replace!" (
       SET "FOUNDLOCALIP=%%H"
       SET "LOCALIP=!FOUNDLOCALIP: =!"
@@ -564,13 +593,18 @@ IF DEFINED GOTLICENSE IF NOT EXIST "%HERE%\univ-utils\license.txt" (
 IF NOT EXIST settings-universalator.txt GOTO :startover
 
 :: BEGIN MAIN MENU
-
 :mainmenu
 
 TITLE Universalator %UNIV_VERSION%
 IF EXIST settings-universalator.txt (
   :: Reads off the contents of the settings file if it's present, to set current setting values.  Doing it this way avoids needing to rename the file to a .bat or .cmd to perform a CALL.
-  FOR /F "delims=" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" %%A
+  FOR /F "tokens=1,2 delims==" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" (
+    REM Uses replacment to get rid of spaces after the = sign
+    SET "TEMP=%%B"
+    SET "TEMP=!TEMP: =!"
+    SET "VAR=%%A=!TEMP!"
+    !VAR!
+  )
   :: Sets a string variable for passing -Xmx JVM startup argument to java launches, based on the integer entered for number of gigs.
   IF DEFINED MAXRAMGIGS IF [!MAXRAMGIGS!] NEQ [] SET MAXRAM=-Xmx!MAXRAMGIGS!G
   :: The settings txt file has one entry for MODLOADER version.  Depending on the value of MODLOADER, set the variable for whichever modloader type is set equal to the MODLOADERVERSION.
@@ -580,6 +614,12 @@ IF EXIST settings-universalator.txt (
   IF /I !MODLOADER!==QUILT SET QUILTLOADER=!MODLOADERVERSION!
 )
 IF NOT EXIST univ-utils MD univ-utils
+IF NOT DEFINED PROTOCOL SET PROTOCOL=TCP
+IF DEFINED PROTOCOL IF !PROTOCOL! NEQ TCP IF NOT EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
+  SET PROTOCOL=TCP
+  CALL :univ_settings_edit PROTOCOL TCP
+)
+
 SET /a RESTARTCOUNT=0
 SET "MAINMENU="
 
@@ -608,15 +648,23 @@ ECHO: & ECHO:
 IF DEFINED MAXRAMGIGS ECHO   %yellow% MAX RAM / MEMORY %blue%  !MAXRAMGIGS!
 ECHO:
 ECHO:
-IF DEFINED PORT ECHO   %yellow% CURRENT PORT SET %blue%  !PORT!                                %green% MENU OPTIONS %blue%
-ECHO:
-IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" IF !ISUPNPACTIVE!==N ECHO   %yellow% UPNP STATUS %blue%       %red% NOT ACTIVATED %blue%
-IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" IF !ISUPNPACTIVE!==Y  ECHO   %yellow% UPNP STATUS %blue%  %green% ACTIVE - FORWARDING PORT %PORT% %blue%
+IF DEFINED PORT IF NOT DEFINED USEPORTFORWARDED ECHO   %yellow% CURRENT PORT SET %blue%  TCP !PORT!
+IF DEFINED PORT IF !USEPORTFORWARDED!==N ECHO   %yellow% CURRENT PORT SET %blue%  TCP !PORT!
+IF !USEPORTFORWARDED!==Y IF DEFINED PORT IF DEFINED PROTOCOL IF "!PROTOCOL!"=="TCP" ECHO   %yellow% CURRENT PORT SET %blue%  TCP !PORT!
+IF !USEPORTFORWARDED!==Y IF DEFINED PORT IF DEFINED PORTUDP IF DEFINED PROTOCOL IF "!PROTOCOL!"=="BOTH" ECHO   %yellow% CURRENT PORTS SET %blue%  TCP !PORT! / UDP !PORTUDP!
+IF !USEPORTFORWARDED!==Y IF DEFINED PORTUDP IF DEFINED PROTOCOL IF "!PROTOCOL!"=="UDP" ECHO   %yellow% CURRENT PORT SET %blue%  UDP !PORTUDP!
+
+
+ECHO                                                             %green% MENU OPTIONS %blue%
+IF DEFINED USEPORTFORWARDED IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
+  IF !USEPORTFORWARDED!==Y ECHO   %yellow% UPNP PORT FORWARDING %blue% - %green% ENABLED %blue%
+  IF !USEPORTFORWARDED!==N ECHO   %yellow% UPNP PORT FORWARDING %blue% - %red% DISABLED %blue%
+)
 IF EXIST settings-universalator.txt ECHO                                                        %green% L %blue%    = LAUNCH SERVER & ECHO:
 IF NOT EXIST settings-universalator.txt ECHO                                                        %green% S %blue%    = SETTINGS ENTRY
 IF EXIST settings-universalator.txt ECHO                                                        %green% S %blue%    = RE-ENTER ALL SETTINGS
 ECHO                                                        %green% R %blue%    = RAM MAX SETTING
-IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" ECHO                                                        %green% UPNP %blue% = UPNP PORT FORWARDING MENU
+ECHO                                                        %green% UPNP %blue% = UPNP PORT FORWARDING MENU
 ECHO                                                        %green% SCAN %blue% = SCAN MOD FILES FOR CLIENT MODS & ECHO:
 ECHO                                                        %green% A %blue%    = (LIST) ALL POSSIBLE MENU OPTIONS
 :allcommandsentry
@@ -1269,6 +1317,10 @@ IF NOT EXIST settings-universalator.txt (
   SET ASKMODSCHECK=Y
 )
 :setconfig
+
+IF NOT DEFINED USEPORTFORWARDED SET USEPORTFORWARDED=N
+IF NOT DEFINED PROTOCOL SET PROTOCOL=TCP
+
 :: Generates settings-universalator.txt file according to the current settings values.  The first value only having one > overwrites any existing file text with one single line
 
     ECHO :: To reset this file - delete and run launcher again.>settings-universalator.txt
@@ -1297,10 +1349,23 @@ IF NOT EXIST settings-universalator.txt (
     ECHO ::>>settings-universalator.txt
     ECHO :: Whether or not the next settings menu entry done asks to scan for client only mods>>settings-universalator.txt
     ECHO SET ASKMODSCHECK=!ASKMODSCHECK!>>settings-universalator.txt
+    ECHO ::>>settings-universalator.txt
+    ECHO :: TCP protocol port.  This is the protocol that the game uses>>settings-universalator.txt
+    ECHO SET PORT=!PORT!>>settings-universalator.txt
+    ECHO ::>>settings-universalator.txt
+    ECHO :: UDP protocol port.  This is what some voice chat mods use>>settings-universalator.txt
+    ECHO SET PORTUDP=!PORTUDP!>>settings-universalator.txt
+    ECHO ::>>settings-universalator.txt
+    ECHO :: Which types to use for port forwarding using UPNP - only enter TCP, UDP, or BOTH>>settings-universalator.txt
+    ECHO SET PROTOCOL=!PROTOCOL!>>settings-universalator.txt
+    ECHO ::>>settings-universalator.txt
+    ECHO :: Whether or not to remember auto port forwarding using UPnP with Portforwarded>>settings-universalator.txt
+    ECHO SET USEPORTFORWARDED=!USEPORTFORWARDED!>>settings-universalator.txt
 
 :: Returns to main menu if menu option was only to enter java or ram values
 IF /I !MAINMENU!==R GOTO :mainmenu
 IF /I !MAINMENU!==J GOTO :mainmenu
+IF /I !MAINMENU!==UPNP GOTO :upnpmenu
 
 SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
 
@@ -1340,6 +1405,8 @@ CLS
 ECHO:
 REM BEGIN JAVA SETUP SECTION
 REM Presets a variable to use as a search string versus java folder names.
+
+:javaupnp
 
 IF !JAVAVERSION!==8 SET FINDFOLDER=jdk8u
 IF !JAVAVERSION!==11 SET FINDFOLDER=jdk-11
@@ -1470,6 +1537,8 @@ SET "JAVANUM=!JAVAFOLDER:jdk-=!"
 SET "JAVANUM=!JAVANUM:-jdk=!"
 SET "JAVANUM=!JAVANUM:-jre=!"
 SET "JAVANUM=!JAVANUM:-LTS=!"
+
+IF DEFINED GETUPNPJAVA GOTO :returnjavaupnp
 
 :: END JAVA SETUP SECTION
 
@@ -2055,7 +2124,6 @@ If !JAVAVERSION! GEQ 17 (
 
 TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 ver >nul
-IF /I !MODLOADER!==NEOFORGE GOTO :actuallylaunchneoforge
 
 :: Launching Forge for MC 1.16 and older.  Each IF EXIST tries to find the launch JAR using the various naming schemes that Forge has used over time.
 IF !MCMAJOR! LEQ 16 (
@@ -2070,8 +2138,8 @@ IF !MCMAJOR! LEQ 16 (
     PAUSE
     GOTO :mainmenu
   )
-
-  "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar !FORGEFILE! nogui
+  REM Sets the launch line for all MC  1.16 and older
+  SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar !FORGEFILE! nogui"
 )
  
 :: Launching Minecraft versions 1.17 and newer.  As of 1.20.4 Forge went back to an executable JAR file that gets put in the main directory.
@@ -2079,19 +2147,31 @@ IF !MCMAJOR! GEQ 17 SET LAUNCHFORGE=NEWOLD
 IF !MCMAJOR! EQU 20 IF !MCMINOR! GEQ 4 SET LAUNCHFORGE=NEWNEW
 IF !MCMAJOR! GEQ 21 SET LAUNCHFORGE=NEWNEW
 
-IF !LAUNCHFORGE!==NEWOLD (
-  "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
-)
-IF !LAUNCHFORGE!==NEWNEW (
-  REM "%JAVAFILE%" -server !MAXRAM! %ARGS% %OTHERARGS% -jar forge-!MINECRAFT!-!FORGE!-shim.jar nogui
-  "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %*
+IF !LAUNCHFORGE!==NEWOLD SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
+
+IF !LAUNCHFORGE!==NEWNEW SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
+
+IF /I !MODLOADER!==NEOFORGE (
+  IF !MINECRAFT!==1.20.1 SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %%*"
+  IF !MINECRAFT! NEQ 1.20.1 SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %%*"
 )
 
-:actuallylaunchneoforge
-IF /I !MODLOADER!==NEOFORGE (
-  IF !MINECRAFT!==1.20.1 "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %*
-  IF !MINECRAFT! NEQ 1.20.1 "%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %*
+REM The launch method depends on whether to use UPNP port forwarding or not.  Strongly tests we really want to do it that way or not.
+IF !USEPORTFORWARDED!==Y SET LAUNCH=UPNP
+IF NOT EXIST "univ-utils\Portforwarded\Portforwarded.Server.exe" SET LAUNCH=NORMAL
+IF !USEPORTFORWARDED!==N SET LAUNCH=NORMAL
+
+IF "!LAUNCH!"=="UPNP" (
+  IF /I "!PROTOCOL!"=="TCP" univ-utils\Portforwarded\Portforwarded.Server.exe executable:file="!JAVAFILE!" executable:workingdirectory="!HERE!" executable:parameters="!LAUNCHLINE!" upnp:0:Protocol="Tcp" upnp:0:LocalPort=!PORT! upnp:0:PublicPort=!PORT!
+  IF /I "!PROTOCOL!"=="BOTH" univ-utils\Portforwarded\Portforwarded.Server.exe executable:file="!JAVAFILE!" executable:workingdirectory="!HERE!" executable:parameters="!LAUNCHLINE!" upnp:0:Protocol="Tcp" upnp:0:LocalPort=!PORT! upnp:0:PublicPort=!PORT! upnp:1:Protocol="Udp" upnp:1:LocalPort=!PORTUDP! upnp:1:PublicPort=!PORTUDP!
+  IF /i "!PROTOCOL!"=="UDP" univ-utils\Portforwarded\Portforwarded.Server.exe executable:file="!JAVAFILE!" executable:workingdirectory="!HERE!" executable:parameters="!LAUNCHLINE!" upnp:1:Protocol="Udp" upnp:1:LocalPort=!PORTUDP! upnp:1:PublicPort=!PORTUDP!
 )
+
+REM If not using the UPNP port forwarding, launch the normal way
+IF "!LAUNCH!"=="NORMAL" !JAVAFILE! !LAUNCHLINE!
+
+REM Resets console color back to Univ colors
+color 1E
 
 :: If auto restart is enabled, check if server was purposely shut down or if should restart
 IF DEFINED RESTART IF !RESTART!==Y IF EXIST "logs\latest.log" FINDSTR /I "Stopping the server" "logs\latest.log" || (
@@ -2570,6 +2650,7 @@ ECHO   Minecraft server JAR not found - attempting to download from Mojang serve
 ECHO   Downloading Minecraft server JAR file... .. . & ECHO:
 
 :getmcmanifest
+:upnpgetjar
 :: Tests for whether to download missing manifest file
 SET GETMANIFEST=U
 IF NOT EXIST "univ-utils\version_manifest_v2.json" SET GETMANIFEST=Y
@@ -2635,6 +2716,9 @@ IF !MCJARCHECKSUM! NEQ !SERVERJARSHA1! (
   PAUSE
   GOTO :preparevanilla
 )
+
+IF DEFINED UPNPGETMCJAR GOTO :returnupnpgetjar
+
 ECHO   Checksum values of downloaded server JAR and expected value match - file is valid & ECHO:
 %DELAY%
 IF /I !MODLOADER!==FORGE GOTO :returnfromgetvanillajar
@@ -2694,15 +2778,29 @@ If !JAVAVERSION! GEQ 17 (
 TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 
 :: Actually launch the server!
-IF /I !MODLOADER!==FABRIC (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui
+
+REM Sets the different launch methods for each type of modloader.
+IF /I !MODLOADER!==FABRIC SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui"
+IF /I !MODLOADER!==QUILT SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui"
+IF /I !MODLOADER!==VANILLA SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar minecraft_server.!MINECRAFT!.jar nogui"
+
+REM The launch method depends on whether to use UPNP port forwarding or not.  Strongly tests we really want to do it that way or not.
+IF DEFINED USEPORTFORWARDED IF !USEPORTFORWARDED!==Y SET LAUNCH=UPNP
+IF NOT EXIST "univ-utils\Portforwarded\Portforwarded.Server.exe" SET LAUNCH=NORMAL
+IF !USEPORTFORWARDED!==N SET LAUNCH=NORMAL
+
+IF "!LAUNCH!"=="UPNP" (
+  IF /I "!PROTOCOL!"=="TCP" univ-utils\Portforwarded\Portforwarded.Server.exe executable:file="!JAVAFILE!" executable:workingdirectory="!HERE!" executable:parameters="!LAUNCHLINE!" upnp:0:Protocol="Tcp" upnp:0:LocalPort=!PORT! upnp:0:PublicPort=!PORT!
+  IF /I "!PROTOCOL!"=="BOTH" univ-utils\Portforwarded\Portforwarded.Server.exe executable:file="!JAVAFILE!" executable:workingdirectory="!HERE!" executable:parameters="!LAUNCHLINE!" upnp:0:Protocol="Tcp" upnp:0:LocalPort=!PORT! upnp:0:PublicPort=!PORT! upnp:1:Protocol="Udp" upnp:1:LocalPort=!PORTUDP! upnp:1:PublicPort=!PORTUDP!
+  IF /i "!PROTOCOL!"=="UDP" univ-utils\Portforwarded\Portforwarded.Server.exe executable:file="!JAVAFILE!" executable:workingdirectory="!HERE!" executable:parameters="!LAUNCHLINE!" upnp:1:Protocol="Udp" upnp:1:LocalPort=!PORTUDP! upnp:1:PublicPort=!PORTUDP!
 )
-IF /I !MODLOADER!==QUILT (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui
-)
-IF /I !MODLOADER!==VANILLA (
-"%JAVAFILE%" !MAXRAM! %ARGS% %OTHERARGS% -jar minecraft_server.!MINECRAFT!.jar nogui
-)
+
+REM If not using the UPNP port forwarding, launch the normal way
+IF "!LAUNCH!"=="NORMAL" !JAVAFILE! !LAUNCHLINE!
+
+
+REM Resets console color back to Univ colors
+color 1E
 
 :: If auto restart is enabled, check if server was purposely shut down or if should restart
 IF DEFINED RESTART IF !RESTART!==Y IF EXIST "logs\latest.log" FINDSTR /I "Stopping the server" "logs\latest.log" || (
@@ -2718,16 +2816,7 @@ GOTO :logsscan
 :: BEGIN UPNP SECTION
 :upnpmenu
 :: First check to see if LOCALIP was found previously on launch or not.  If miniUPnP was just installed during this program run it needs to be done!
-IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" IF NOT DEFINED LOCALIP (
-  SET LOCALIP=NOLOCALIPFOUND
-  FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
-    SET CHECKUPNPSTATUS=%%E
-    IF "!CHECKUPNPSTATUS!" NEQ "!CHECKUPNPSTATUS:Local LAN ip address=replace!" SET LANLINE=%%E
-  )
-  IF DEFINED LANLINE (
-  FOR /F "tokens=5 delims=: " %%T IN ("!LANLINE!") DO SET LOCALIP=%%T
-)
-)
+
 :: Sets a variable to toggle so that IP addresses can be shown or hidden
 IF NOT DEFINED SHOWIP SET SHOWIP=N
 :: Actually start doing the upnp menu
@@ -2737,8 +2826,8 @@ ECHO ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ECHO      UPNP PORT FORWARDING MENU    
 ECHO ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%blue%
 ECHO: & ECHO:
-IF NOT EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
-ECHO   %yellow% MiniUPnP PROGRAM %blue% - %red% NOT YET INSTALLED / DOWNLOADED %blue%
+IF NOT EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
+ECHO   %yellow% 'Portforwarded.Server' PROGRAM %blue% - %red% NOT YET INSTALLED / DOWNLOADED %blue%
 ECHO   Port forwarding done in one way or another is requied for people outside your router network to connect.
 ECHO   ---------------------------------------------------------------------------------------------
 ECHO   %yellow% SETTING UP PORT FORWARDING: %blue%
@@ -2749,45 +2838,60 @@ ECHO   2. UPnP CAN ALTERNATIVELY BE USED IF YOU HAVE NETWORK ROUTER WHICH IS COM
 ECHO      - UPnP is a connection method with which networked computers can open ports on network routers.
 ECHO      - Not all routers have UPnP - and if yours does it needs to be enabled in settings  - it often is by default.
 ECHO: & ECHO:
-ECHO      - The program used by the Universalator to do UPnP functions - MiniUPnP, is not downloaded by default.
+ECHO      - The program used by the Universalator to do UPnP functions - 'Portforwarded.Server', is not downloaded by default.
 ECHO        To check if your router can use UPnP, and use it for setting up port forwarding - you can
-ECHO        enter %yellow% 'DOWNLOAD' %blue% to install the MiniUPnP program and enable the Universalator UPNP Menu.
+ECHO        enter %yellow% 'DOWNLOAD' %blue% to install the 'Portforwarded.Server' program and enable the Universalator UPNP Menu.
 ECHO: & ECHO:
 ECHO: & ECHO   ENTER YOUR SELECTION & ECHO      %green% 'DOWNLOAD' - Download UPnP Program %blue% & ECHO      %green% 'M' - Main Menu %blue%
 )
 
 IF NOT DEFINED PROTOCOL SET "PROTOCOL=TCP"
+IF NOT DEFINED PORTUDP SET "PORTUDP=24454"
 
-IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
-ECHO   %yellow% MiniUPnP PROGRAM %blue% - %green% DOWNLOADED %blue%
-ECHO   %yellow% PROTOCOL    %blue% -      %green% %PROTOCOL% %blue%
-IF !ISUPNPACTIVE!==N ECHO   %yellow% UPNP STATUS %blue% -      %red% NOT ACTIVATED: %blue% & ECHO                        %red% 'A' - ACTIVATE %yellow% OR %red% SET UP AND USE MANUAL NETWORK ROUTER PORT FORWARDING %blue% & ECHO:
-IF !ISUPNPACTIVE!==Y  ECHO   %yellow% UPNP STATUS %blue% - %green% ACTIVE - FORWARDING PORT %PORT% %blue% & ECHO:
+IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
+  where dotnet  2>nul 1>nul || (
+    CLS
+    ECHO: & ECHO: & ECHO   %yellow% OH HEY - IT LOOKS LIKE YOU DON'T HAVE MICROSOFT .NET INSTALLED %blue%
+    ECHO   %yellow%    Microsoft .net ^(also known as dotnet ^) is required by the UPNP program which Universalator now uses. %blue%
+    ECHO   %yellow%    HERE IS MICROSOFT'S WEBSITE FOR .NET INSTALLER DOWNLOADS: %blue% & ECHO: & ECHO:
+    ECHO   https://dotnet.microsoft.com/en-us/download & ECHO: & ECHO   Either go there to get an installer to use, or search the Internet. & ECHO: & ECHO: & ECHO:
+    PAUSE
+    GOTO :mainmenu
+  )
+)
+
+IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
+ECHO   %yellow% Portforwarded.Server PROGRAM %blue% - %green% DOWNLOADED %blue% & ECHO:
+ECHO   %yellow% PROTOCOL    %blue% -    %green% %PROTOCOL% %blue%
+IF !USEPORTFORWARDED!==N ECHO   %yellow% UPNP STATUS %blue% -      %red% NOT ACTIVE - WILL NOT USE UPNP PORT FORWARDING %blue% & ECHO                        %red% 'A' - TO ACTIVATE %yellow% OR %red% SET UP AND USE MANUAL NETWORK ROUTER PORT FORWARDING %blue% & ECHO:
+IF "!PROTOCOL!"=="TCP" IF !USEPORTFORWARDED!==Y  ECHO   %yellow% UPNP STATUS %blue% - %green% ACTIVE - WILL FORWARD PORT - TCP !PORT! %blue% & ECHO:
+IF "!PROTOCOL!"=="BOTH" IF !USEPORTFORWARDED!==Y  ECHO   %yellow% UPNP STATUS %blue% - %green% ACTIVE - WILL FORWARD PORT - TCP !PORT! / UDP !PORTUDP! %blue% & ECHO:
+IF "!PROTOCOL!"=="UDP" IF !USEPORTFORWARDED!==Y  ECHO   %yellow% UPNP STATUS %blue% - %green% ACTIVE - WILL FORWARD PORT - UDP !PORTUDP! %blue% & ECHO:
 IF !SHOWIP!==Y ECHO                                                               %yellow% Local IP:port  %blue% - !LOCALIP!:%PORT%
 IF !SHOWIP!==Y ECHO                                                               %yellow% Public IP:port %blue% - !PUBLICIP!:%PORT%
 IF !SHOWIP!==N ECHO:
 IF !SHOWIP!==N ECHO:
 ECHO    OPTIONS:
-ECHO   %green% TOGGLE - Toggle port forwarding between ^[TCP^], ^[TCP ^& UDP^], ^[UDP^] %blue% 
 ECHO   %green% CHECK - Check for a network router with UPnP enabled %blue% 
+ECHO   %green% TOGGLE - Toggle port forwarding between ^[TCP^], ^[TCP ^& UDP^], ^[UDP^] %blue% 
+ECHO   %green% PORT - Change the port numbers being used %blue% 
 IF !SHOWIP!==N ECHO   %green% SHOW  - Show your Local and Public IP addresses %blue% && ECHO:
 IF !SHOWIP!==Y ECHO   %green% HIDE  - Hide your Local and Public IP addresses %blue% && ECHO:
 ECHO   %green% A - Activate UPnP Port Forwarding     %blue%
 ECHO   %green% D - Deactivate UPnP Port Forwarding   %blue%
-ECHO   %green% S - Status of port forwarding refresh %blue%
 ECHO: & ECHO   %green% M - Main Menu %blue%
 ECHO: & ECHO   Enter your choice:
 )
 ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "ASKUPNPMENU="
-IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
+IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
 IF /I !ASKUPNPMENU!==M GOTO :mainmenu
 IF /I !ASKUPNPMENU!==CHECK GOTO :upnpvalid
 IF /I !ASKUPNPMENU!==TOGGLE GOTO :toggle
+IF /I !ASKUPNPMENU!==PORT GOTO :upnpport
 IF /I !ASKUPNPMENU!==A GOTO :upnpactivate
 IF /I !ASKUPNPMENU!==D GOTO :upnpdeactivate
-IF /I !ASKUPNPMENU!==S GOTO :upnpstatus
 IF /I !ASKUPNPMENU!==SHOW (
   SET SHOWIP=Y
   GOTO :upnpmenu
@@ -2795,62 +2899,226 @@ IF /I !ASKUPNPMENU!==SHOW (
 IF /I !ASKUPNPMENU!==HIDE (
   SET SHOWIP=N
   GOTO :upnpmenu
-)
-IF /I !ASKUPNPMENU! NEQ M IF /I !ASKUPNPMENU! NEQ CHECK IF /I !ASKUPNPMENU! NEQ TOGGLE IF /I !ASKUPNPMENU! NEQ A IF /I !ASKUPNPMENU! NEQ D IF /I !ASKUPNPMENU! NEQ S GOTO :upnpmenu
+) 
+REM IF /I !ASKUPNPMENU! NEQ M IF /I !ASKUPNPMENU! NEQ CHECK IF /I !ASKUPNPMENU! NEQ TOGGLE IF /I !ASKUPNPMENU! NEQ PORT IF /I !ASKUPNPMENU! NEQ A IF /I !ASKUPNPMENU! NEQ D GOTO :upnpmenu
 )
 
-IF NOT EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
+IF  EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
+   GOTO :upnpmenu
+) ELSE (
 IF /I !ASKUPNPMENU!==DOWNLOAD GOTO :upnpdownload
 IF /I !ASKUPNPMENU!==M GOTO :mainmenu
 IF /I !ASKUPNPMENU! NEQ DOWNLOAD IF /I !ASKUPNPMENU! NEQ M GOTO :upnpmenu
 )
 
+
 :: Switches between protocol types to forward
 :toggle
-IF !PROTOCOL!==TCP ( SET "PROTOCOL=TCP ^& UDP" ) ELSE (
-  IF "!PROTOCOL!"=="TCP ^& UDP" ( SET "PROTOCOL=UDP" ) ELSE (
+IF !PROTOCOL!==TCP ( SET "PROTOCOL=BOTH" ) ELSE (
+  IF "!PROTOCOL!"=="BOTH" ( SET "PROTOCOL=UDP" ) ELSE (
     SET "PROTOCOL=TCP"
   )
 )
+FOR /F "delims=" %%A IN (settings-universalator.txt) DO (
+  SET "TEMP=%%A"
+  IF "!TEMP:SET PROTOCOL=x!" NEQ "!TEMP!" ( ECHO SET PROTOCOL=!PROTOCOL!>>z.txt ) ELSE ( ECHO !TEMP!>>z.txt ) )
+DEL settings-universalator.txt
+REN z.txt settings-universalator.txt
 GOTO :upnpmenu
 
-:: BEGIN UPNP LOOK FOR VALID & ENABLED UPNP ROUTER
+:: User can enter their port numbers to be used
+:upnpport
+CLS
+
+REM Leave as %DOTCP% not !DOTCP! - CMD weirdness...
+IF "%PROTOCOL%"=="TCP" SET DOTCP=Y & SET DOUDP=N
+IF "%PROTOCOL%"=="BOTH" SET DOTCP=Y & SET DOUDP=Y
+IF "%PROTOCOL%"=="UDP" SET DOTCP=N & SET DOUDP=Y
+
+IF %DOTCP%==Y (
+  SET "TCPSTART=!PORT!"
+  ECHO: & ECHO: & ECHO   %yellow% THE TCP PORT PREVIOUSLY ENTERED WAS %green% !PORT! %blue% & ECHO: & ECHO: & ECHO:
+  
+  ECHO: & ECHO   %yellow% ENTER THE PORT NUMBER TO BE USED FOR THE %green% TCP %yellow% PORT %blue% & ECHO:
+  ECHO   %yellow% OR 'default' TO USE THE DEFAULT MINECRAFT PORT 25565 & ECHO:
+  SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
+  SET /P "PORT2="
+
+  IF /I "!PORT2!"=="default" (
+    SET "PORT=25565"
+    REM Corrects the server.properties file if the TCP port number changed
+    IF "!PORT!" NEQ "!TCPSTART!" (
+      CALL :serverpropsedit server-port !PORT!
+      CALL :univ_settings_edit PORT !PORT!
+    )
+    IF "!PROTOCOL!"=="TCP" (
+      GOTO :upnpmenu
+    ) ELSE ( 
+      IF NOT DEFINED PORTUDP SET PORTUDP=24454
+      SET UDPSTART=!PORTUDP!
+      GOTO :upnp_udpagain
+    )
+  ) 
+
+  ( ECHO !PORT2! | FINDSTR /R [a-Z] 1>nul 2>nul ) && (
+    REM If setting PORT2 to be an integer fails then they didn't enter only an integer
+    ECHO: & ECHO   %red% OOPS %blue% - You did not enter an integer number.  Try again. & ECHO:
+    PAUSE
+    GOTO :upnpport
+  ) || ( SET "PORT3=" )
+
+  IF !PORT2! LSS 10000 (
+    ECHO: & ECHO      %red% OOPS %blue% - DO NOT SET THE PORT TO BE USED BELOW 10000 - BELOW THAT NUMBER IS NOT A GOOD IDEA
+    ECHO       Other critical processes may be using numbers below 10000 & ECHO: & ECHO   TRY AGAIN^^! & ECHO: & ECHO:
+    PAUSE
+    GOTO :upnpport
+  )
+  SET "PORT=!PORT2!" & SET "PORT2="
+  REM Corrects the server.properties file if the TCP port number changed
+  IF "!PORT!" NEQ "!TCPSTART!" (
+    CALL :serverpropsedit server-port !PORT!
+    CALL :univ_settings_edit PORT !PORT!
+  )
+)
+
+IF NOT DEFINED PORTUDP SET PORTUDP=24454
+SET UDPSTART=!PORTUDP!
+
+:upnp_udpagain
+IF %DOUDP%==Y (
+  IF EXIST "config\voicechat\voicechat-server.properties" (
+    CLS
+    FOR /F "tokens=2 delims=^= " %%A IN ('FINDSTR "port=" "config\voicechat\voicechat-server.properties"') DO SET PORTCONFIG=%%A
+    ECHO: & ECHO: & ECHO   %yellow% A %green% 'Simple Voice Chat' mod %yellow% config file was found, with a value set to use UDP port %green% !PORTCONFIG! %blue% & ECHO:
+    ECHO   %yellow% FYI - The default 'Simple Voice Chat' mod port number is 24454 %blue% & ECHO:
+    ECHO   %yellow% Do you want to use this port number %green% !PORTCONFIG! %yellow% for your %green% UDP %yellow% port setting? %blue% & ECHO:
+    SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
+    SET /P "ASK="
+    IF /I !ASK!==Y SET "PORT2=!PORTCONFIG!"
+    IF /I !ASK! NEQ Y  (
+      ECHO: & ECHO   You said N, or at least not Y & ECHO: & ECHO   %yellow% Enter a port number to use for %green% UDP %blue%
+      ECHO   %yellow% OR - enter 'default' to use 24454 %blue% & ECHO:
+      SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
+      SET /P "PORT2="
+
+      IF /I "!PORT2!"=="default" (
+        SET "PORTUDP=24454"
+      )
+      IF /I "!PORT2!" NEQ "default" ( ( ECHO !PORT2! | FINDSTR /R [a-Z] 1>nul 2>nul ) && (
+        REM If setting PORT2 to be an integer fails then they didn't enter only an integer
+        ECHO   %red% OOPS %blue% - You did not enter an integer number.  Try again. & ECHO:
+        PAUSE
+        GOTO :upnp_udpagain
+      ) )
+    )
+
+
+    IF /I "!PORT2!"=="default" SET "PORT2=24454"
+
+    IF "!PORT2!" NEQ "!PORTCONFIG!" (
+      FOR /F "delims=" %%A IN ('type config\voicechat\voicechat-server.properties') DO (
+        SET "TEMP=%%A"
+        SET "PORTLINE=port=!PORT2!"
+
+        REM If both replacement tests on TEMP pass then it's the real port entry and not a comment, otherwise put back the original line.
+        IF "!TEMP!" NEQ "!TEMP:#=x!" ( ECHO !TEMP!>>config\voicechat\2voicechat-server.properties ) ELSE (
+          IF "!TEMP!" NEQ "!TEMP:port=x!" ( ECHO !PORTLINE!>>config\voicechat\2voicechat-server.properties ) ElSE (
+            ECHO !TEMP!>>config\voicechat\2voicechat-server.properties 
+          )
+        )
+      )
+      REM You have to be in the same working directory as the file to rename the file.
+      PUSHD config\voicechat
+      DEL voicechat-server.properties 1>nul 2>nul
+      REN 2voicechat-server.properties voicechat-server.properties
+      POPD
+    )
+    SET "PORTUDP=!PORT2!" & SET "PORT2="
+  ) ELSE (
+    ECHO: & ECHO: & ECHO   %yellow% ENTER THE PORT NUMBER TO BE USED FOR THE %green% UDP %blue% PORT & ECHO:
+    ECHO: & IF DEFINED PORTUDP ( ECHO   %yellow% The port you had set already was - %green% !PORTUDP! %blue% & ECHO: )
+    ECHO: & ECHO   Enter a port number to use for UDP & ECHO:
+    SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
+    SET /P "PORT2="
+    FOR %%A IN (!PORT2!) DO ( SET /a "PORT2=%%A" 1>nul 2>nul || (
+      REM If setting PORT2 to be an integer fails then they didn't enter only an integer
+      ECHO   %red% OOPS %blue% - You did not enter an integer number.  Try again. & ECHO:
+      PAUSE
+      GOTO :upnp_udpagain
+    ))
+    SET "PORTUDP=!PORT2!" & SET "PORT2="
+  )
+  IF "!UDPSTART!" NEQ "!PORTUDP!" ( CALL :univ_settings_edit PORTUDP !PORTUDP! )
+)
+GOTO :upnpmenu
+
+:: BEGIN UPNP CHECK / LOOK FOR VALID & ENABLED UPNP ROUTER
 :upnpvalid
 :: Loops through the status flag -s looking for lines that are different between itself and itself but replacing any found 'Found valid IGD' with random other string.
 SET FOUNDVALIDUPNP=N
 ECHO   Checking for UPnP Enabled Network Router ... ... ...
-FOR /F "delims=" %%B IN ('univ-utils\miniupnp\upnpc-static.exe -s') DO (
-    SET UPNPSCAN=%%B
-    IF "!UPNPSCAN!" NEQ "!UPNPSCAN:Found valid IGD=huh!" SET FOUNDVALIDUPNP=Y
+
+:: Need to use a java verion to use the Portforwarded.Server test - any java will do since old MC 1.4.2 will be use as the tester.  If this finds a java in PATH just go with it.
+( WHERE java | FINDSTR "java.exe" 2>&1 >nul ) && ( SET "UPNPJAVA=java" )
+
+REM If java wasn't found in the path then need to actually get a copy by preinstalling.  There should be a JAVAVERSION set!
+IF NOT DEFINED UPNPJAVA (
+  SET GETUPNPJAVA=Y
+  GOTO :javaupnp
 )
-:: Messages to confirm or give the bad news about finding a UPNP enabled device.
-IF !FOUNDVALIDUPNP!==N (
+:returnjavaupnp
+IF DEFINED GETUPNPJAVA (
+  SET "UPNPJAVA=!JAVAFILE!"
+  REM Adds a backquote in front of single quotes because using this in powershell and needs char escaping.
+  SET "UPNPJAVA=!UPNPJAVA:'=`'!"
+  SET "GETUPNPJAVA="
+)
+
+:: Now gets a vanilla Minecraft server JAR to use for testing
+IF NOT EXIST "%HERE%\univ-utils\Portforwarded\minecraft_server.1.4.2.jar" (
+  SET "MCHOLDER=!MINECRAFT!"
+  SET "MINECRAFT=1.4.2"
+  SET UPNPGETMCJAR=Y
+  GOTO :upnpgetjar
+)
+:returnupnpgetjar
+IF DEFINED UPNPGETMCJAR (
+  SET "MINECRAFT=!MCHOLDER!" & SET "MCHOLDER=" & SET "UPNPGETMCJAR="
+  IF EXIST "minecraft_server.1.4.2.jar" ( MOVE "%HERE%\minecraft_server.1.4.2.jar" "%HERE%\univ-utils\Portforwarded\minecraft_server.1.4.2.jar" >nul ) ELSE ( GOTO :upnpmenu )
+)
+
+
+SET CHECKPASS=IDK
+FOR /F "delims=" %%A IN ('powershell -Command="cmd.exe /c 'univ-utils\Portforwarded\Portforwarded.Server.exe' executable:file='!UPNPJAVA!' executable:workingdirectory='univ-utils\Portforwarded' executable:parameters='-Xmx3G -jar minecraft_server.1.4.2.jar nogui' upnp:0:Protocol='Tcp' upnp:0:LocalPort=!PORT! upnp:0:PublicPort=!PORT! testmode='true'"') DO (
+    ECHO "%%A" | FINDSTR /I /C:"Created map for IP" >nul && SET CHECKPASS=Y
+)
+
+IF !CHECKPASS!==Y (
+    CLS
+    ECHO: & ECHO: & ECHO:
+    ECHO     %green% FOUND A NETWORK ROUTER WITH UPNP ENABLED FOR USE %blue%
+    ECHO:
+    IF /I !ASKUPNPMENU!==A GOTO :upnpreturnactivate
+    PAUSE
+    GOTO :upnpmenu
+) ELSE (
     CLS
     ECHO:& ECHO:
     ECHO   %red% NO UPNP ENABLED NETWORK ROUTER WAS FOUND - SORRY. %blue% & ECHO:
     ECHO   IT IS POSSIBLE THAT YOUR ROUTER DOES HAVE UPNP COMPATIBILITY BUT IT IS CURRENTLY
     ECHO   SET TO DISABLED.  CHECK YOUR NETWORK ROUTER SETTINGS.
-    ECHO: & ECHO   or & ECHO:
+    ECHO: & ECHO   OR & ECHO:
     ECHO   YOU WILL NEED TO CONFIGURE PORT FORWARDING ON YOUR NETWORK ROUTER MANUALLY
     ECHO   FOR INSRUCTIONS YOU CAN WEB SEARCH PORT FORWARDING MINECRAFT SERVERS
-    ECHO   OR
+    ECHO: & ECHO   OR & ECHO:
     ECHO   VISIT THE UNIVERSALATOR WIKI AT:
     ECHO   https://github.com/nanonestor/universalator/wiki
     ECHO: & ECHO:
     PAUSE
     GOTO :upnpmenu
 )
-IF !FOUNDVALIDUPNP!==Y (
-    CLS
-    ECHO: & ECHO: & ECHO:
-    ECHO     %green% FOUND A NETWORK ROUTER WITH UPNP ENABLED FOR USE %blue%
-    ECHO:
-    SET ISUPNPACTIVE=N
-    PAUSE
-    GOTO :upnpmenu
-)
-GOTO :upnpmenu
-:: END UPNP LOOK FOR VALID & ENABLED UPNP ROUTER
+
+:: END UPNP CHECK / LOOK FOR VALID & ENABLED UPNP ROUTER
 
 :: BEGIN UPNP ACTIVATE PORT FOWARD
 :upnpactivate
@@ -2865,194 +3133,76 @@ ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "ENABLEUPNP="
 IF /I !ENABLEUPNP! NEQ N IF /I !ENABLEUPNP! NEQ Y GOTO :upnpactivate
-IF /I !ENABLEUPNP!==N GOTO :upnpmenu
 
-ECHO: & ECHO   %yellow%  Attempting to activate UPnP port forwarding ... .. . %blue% & ECHO: & ECHO   Please wait... .. .
 
-IF "!PROTOCOL!"=="TCP" SET "PROTTRY=TCP"
-IF "!PROTOCOL!"=="TCP ^& UDP" SET "PROTTRY=TCP UDP"
-IF "!PROTOCOL!"=="UDP" SET "PROTTRY=UDP"
+REM Need to check if UPNP will work! If the test fails the script does not come back here, it goes to upnpmenu
+IF /I !ENABLEUPNP!==Y ECHO: & ECHO: & GOTO :upnpvalid
+:upnpreturnactivate
 
-SET /a WHAT=0
-:: Cycles through either TCP, UDP, or both of them
-:: If at any time a port conflict is found just GOTO an issue message.
-FOR %%Z IN (!PROTTRY!) DO (
-  SET ISUPNPACTIVE=IDK
-  FOR /L %%A IN (0,1,2) DO (
-    REM Tries each method of using the miniupnp program to active.  Different routers could require different activation methods.
-    IF %%A==0 IF !ISUPNPACTIVE! NEQ Y (
-      FOR /F "delims=" %%B IN ('univ-utils\miniupnp\upnpc-static.exe -a !LOCALIP! !PORT! !PORT! %%Z 0') DO (
-        SET TEMPM=%%B
-        IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" GOTO :portconflict
-      )
-    )
-    IF %%A==1 IF !ISUPNPACTIVE! NEQ Y (
-      FOR /F "delims=" %%A IN ('univ-utils\miniupnp\upnpc-static.exe -r !PORT! %%Z') DO (
-        SET TEMPM=%%B
-        IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" GOTO :portconflict
-      )
-    )
-    IF %%A==2 IF !ISUPNPACTIVE! NEQ Y (
-    FOR /F "delims=" %%A IN ('univ-utils\miniupnp\upnpc-static.exe -a !PUBLICIP! !PORT! !PORT! %%Z') DO (
-        SET TEMPM=%%B
-        IF "!TEMPM!" NEQ "!TEMPM:ConflictInMappingEntry=x!" GOTO :portconflict
-      )
-    )
-    REM Checks to see if the last method tried above was successful
-    IF !ISUPNPACTIVE! NEQ Y FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
-      SET UPNPSTATUS=%%E
-      REM If the port number is found on a line.
-      IF "!UPNPSTATUS!" NEQ "!UPNPSTATUS:!PORT!=PORT!" (
-        REM If the protocol type being activation attempted is found.
-        ECHO "!UPNPSTATUS!" | FINDSTR "%%Z" >nul && SET ISUPNPACTIVE=Y
-      )
-    )
-  )
-  REM Sets a dummy variable for cases where both protocols are checked.
-  REM If either is success bumps value up, if either fails then it bumps the value down
-  IF !ISUPNPACTIVE!==Y ( SET /a WHAT+=1 ) ELSE ( SET /a WHAT-=1 )
-)
-
-IF !WHAT! GTR 0 (
-  ECHO: & ECHO   %green% ACTIVE - Port forwarding using UPnP is active for port %PORT% %blue% & ECHO: & ECHO:
+REM Handles if Y or N was entered and sets config with result
+IF /I !ENABLEUPNP!==Y (
+  SET USEPORTFORWARDED=Y
+  ECHO: & ECHO     %green% Portforwarded UPNP port forwarding ENABLED^^! %blue% & ECHO:
   PAUSE
-  GOTO :upnpmenu
+  GOTO :setconfig
 ) ELSE (
-  SET ISUPNPACTIVE=N
-  ECHO: & ECHO   %red% SORRY - The activation of UPnP port forwarding was not detected to have worked. %blue% & ECHO: & ECHO:
-  PAUSE
-  GOTO :upnpmenu
+  SET USEPORTFORWARDED=N
+  GOTO :setconfig
 )
-
-:: If a port conflict was detected in the activate loop
-:portconflict
-ECHO: & ECHO   %red% UPNP ACTIVATION NOT SUCCESSFUL - IT LOOKS LIKE PORT SELECTION IS ALREADY IN USE %blue%
-ECHO: & ECHO   %yellow%  TRY CLOSING ANY OLD SERVER WINDOWS OR BACKGROUND PROCESSES / RESTART COMPUTER / RESTART NETWORK ROUTER & ECHO:
-PAUSE
-GOTO :upnpmenu
 
 :: END UPNP ACTIVATE PORT FORWARD
 
-:: BEGIN UPNP CHECK STATUS
-:upnpstatus
-:: Loops through the lines in the -l flag to list MiniUPNP active ports - looks for a line that is different with itself compated to itself but
-:: trying to replace any string inside that matches the port number with a random different string - in this case 'PORT' for no real reason.
-:: Neat huh?  Is proabably faster than piping an echo of the variables to findstr and then checking errorlevels (other method to do this).
-ECHO   %red% Checking Status of UPnP Port Forward ... ... ... %blue% & ECHO: & ECHO   Please wait... .. .
-SET ISUPNPACTIVE=N
-FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
-    SET UPNPSTATUS=%%E
-    IF "!UPNPSTATUS!" NEQ "!UPNPSTATUS:%PORT%=PORT!" SET ISUPNPACTIVE=Y
-)
-:: IF detected port is active then reset var set if sent here by activating code, then either way go back to upnp menu.
-IF !ISUPNPACTIVE!==Y (
-  ECHO: & ECHO   %green% ACTIVE - Port forwarding using UPnP is active for port %PORT% %blue% & ECHO: & ECHO:
-  PAUSE
-  GOTO :upnpmenu
-) ELSE (
-  ECHO   %red% NOT ACTIVE - Port forwarding using UPnP is not active for port %PORT% %blue% & ECHO:
-  PAUSE
-  GOTO :upnpmenu
-)
-:: END UPNP CHECK STATUS
-
-:: BEGIN UPNP DEACTIVATE AND CHECK STATUS AFTER
+:: BEGIN UPNP DEACTIVATE PORT FORWARD
 :upnpdeactivate
-IF NOT DEFINED ISUPNPACTIVE GOTO :upnpmenu
-IF !ISUPNPACTIVE!==N GOTO :upnpmenu
-IF !ISUPNPACTIVE!==Y (
-    CLS
-    ECHO: & ECHO: & ECHO:
-    ECHO   %yellow% UPNP IS CURRENTLY ACTIVE %blue%
-    ECHO:
-    ECHO   %yellow% DO YOU WANT TO DEACTIVATE IT? %blue%
-    ECHO: & ECHO:
-    ECHO       %green% 'Y' or 'N' %blue% & ECHO:
-    ECHO       Enter your choice: & ECHO:
-    SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
-    SET /P "DEACTIVATEUPNP="
-)
-IF /I !DEACTIVATEUPNP! NEQ Y IF /I !DEACTIVATEUPNP! NEQ N GOTO :upnpdeactivate
-IF /I !DEACTIVATEUPNP!==N GOTO :upnpmenu
-:: Deactivates the port connection used by the MiniUPNP program.
-IF /I !DEACTIVATEUPNP!==Y (
-    ECHO: & ECHO   %yellow% Attempting to deactivate UPnP port forwarding ... .. . %blue% & ECHO: & ECHO   Please wait... .. .
 
-    REM Tries to deactive for both TCP and UDP always.
-    univ-utils\miniupnp\upnpc-static.exe -d %PORT% TCP >nul
-    univ-utils\miniupnp\upnpc-static.exe -d %PORT% UDP >nul
+SET USEPORTFORWARDED=N
+ECHO: & ECHO   %red% Portforwarded UPNP port forwarding Disabled^^! %blue% & ECHO:
+PAUSE
+GOTO :setconfig
 
-    SET ISUPNPACTIVE=N
-    FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
-        SET UPNPSTATUS=%%E
-        IF "!UPNPSTATUS!" NEQ "!UPNPSTATUS:%PORT%=PORT!" SET ISUPNPACTIVE=Y
-    )
-    IF !ISUPNPACTIVE!==N (
-        ECHO: & ECHO:
-        ECHO   %yellow% UPNP SUCCESSFULLY DEACTIVATED %blue%
-        ECHO:
-        PAUSE
-        GOTO :upnpmenu
-    )
-    IF !ISUPNPACTIVE!==Y (
-      ECHO: & ECHO: & ECHO:
-      ECHO   %red% DEACTIVATION OF UPNP PORT FORWARDING HAS FAILED %blue% & ECHO:
-      ECHO   %red% UPNP PORT FORWARDING IS STILL ACTIVE %blue% & ECHO:
-      PAUSE
-      GOTO :upnpmenu
-    )
-)
-:: END UPNP DEACTIVATE AND CHECK STATUS AFTER
+::END UPNP DEACTIVATE PORT FORWARD
 
 :: BEGIN UPNP FILE DOWNLOAD
 :upnpdownload
 CLS
 ECHO: & ECHO:
-ECHO  %yellow% DOWNLOAD MINIUPNP PROGRAM? %blue% & ECHO:
-ECHO  ENTERING 'Y' WILL DOWNLOAD THE MINIUPnP PROGRAM FROM THAT PROJECTS WEBSITE AT: & ECHO:
-ECHO   http://miniupnp.free.fr/files/ & ECHO:
-ECHO   MiniUPnP is published / licensed as a free and open source program. & ECHO:
-ECHO  %yellow% DOWNLOAD MINIUPNP PROGRAM? %blue% & ECHO:
+ECHO  %yellow% DOWNLOAD Portforwarded.Server PROGRAM? %blue% & ECHO:
+ECHO  ENTERING 'Y' WILL DOWNLOAD THE Portforwarded.Server PROGRAM FROM THAT PROJECTS WEBSITE ON GITHUB: & ECHO:
+ECHO   https://github.com/itssimple/Portforwarded.Server & ECHO:
+ECHO   Portforwarded.Server is published with the MIT / open source license. & ECHO:
+ECHO  %yellow% DOWNLOAD Portforwarded.Server PROGRAM? %blue% & ECHO:
 ECHO   ENTER YOUR CHOICE: & ECHO:
 ECHO   %green%  'Y' - Download file %blue%
-ECHO   %green%  'N' - NO  (Back to UPnP menu) %blue% & ECHO:
+ECHO   %green%  'N' - NO  ^(Back to UPNP menu^) %blue% & ECHO:
 SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
 SET /P "ASKUPNPDOWNLOAD="
 IF /I !ASKUPNPDOWNLOAD! NEQ N IF /I !ASKUPNPDOWNLOAD! NEQ Y GOTO :upnpdownload
 IF /I !ASKUPNPDOWNLOAD!==N GOTO :upnpmenu
-:: If download is chosen - download the MiniUPNP Windows client ZIP file, License.  Then unzip out only the standalone miniupnp-static.exe file and delete the ZIP.
-IF /I !ASKUPNPDOWNLOAD!==Y IF NOT EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
+:: If download is chosen - download the Portforwarded Windows client ZIP file, License.  Then unzip out only the Portforwarded.Server.exe
+IF /I !ASKUPNPDOWNLOAD!==Y IF NOT EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
   CLS
   ECHO: & ECHO: & ECHO   Downloading ZIP file ... ... ... & ECHO:
-  IF NOT EXIST "%HERE%\univ-utils\miniupnp" MD "%HERE%\univ-utils\miniupnp"
-  powershell -Command "(New-Object Net.WebClient).DownloadFile('http://miniupnp.free.fr/files/upnpc-exe-win32-20220515.zip', 'univ-utils\miniupnp\upnpc-exe-win32-20220515.zip')"
-  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/miniupnp/miniupnp/master/LICENSE', 'univ-utils\miniupnp\LICENSE.txt')"
-  IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-exe-win32-20220515.zip" (
-    ECHO   %green% SUCCESSFULLY DOWNLOADED MINIUPNP BINARAIES ZIP FILE %blue%
-    PUSHD "%HERE%\univ-utils\miniupnp"
-    tar -xf upnpc-exe-win32-20220515.zip upnpc-static.exe >nul
-    DEL upnpc-exe-win32-20220515.zip >nul 2>&1
+  IF NOT EXIST "%HERE%\univ-utils\Portforwarded" MD "%HERE%\univ-utils\Portforwarded"
+  powershell -Command "(New-Object Net.WebClient).DownloadFile('https://github.com/itssimple/Portforwarded.Server/releases/download/2.0.1/Portforwarder.Server-2.0.1-win-x64.zip', 'univ-utils\Portforwarded\Portforwarded_release.zip')"
+  
+  IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded_release.zip" (
+    ECHO   %green% SUCCESSFULLY DOWNLOADED Portforwarded BINARAIES ZIP FILE %blue%
+    PUSHD "%HERE%\univ-utils\Portforwarded"
+    tar -xf Portforwarded_release.zip Portforwarded.Server.exe >nul
+    DEL Portforwarded_release.zip >nul 2>&1
     POPD
   ) ELSE (
-      ECHO: & ECHO  %red% DOWNLOAD OF MINIUPNP FILES ZIP FAILED %blue%
+      ECHO: & ECHO  %red% DOWNLOAD OF Portforwarded FILES ZIP FAILED %blue%
       PAUSE
       GOTO :upnpmenu
   )
-  IF EXIST "%HERE%\univ-utils\miniupnp\upnpc-static.exe" (
-    SET FOUNDUPNPEXE=Y
-    SET ISUPNPACTIVE=N
-    ECHO: & ECHO   %green% MINIUPNP FILE upnpc-static.exe SUCCESSFULLY EXTRACTED FROM ZIP %blue% & ECHO:
-    ECHO   %yellow% Checking current UPnP status ... ... ... %blue% & ECHO:
-    FOR /F "delims=" %%E IN ('univ-utils\miniupnp\upnpc-static.exe -l') DO (
-        SET UPNPSTATUS=%%E
-        IF "!UPNPSTATUS!" NEQ "!UPNPSTATUS:%PORT%=PORT!" SET ISUPNPACTIVE=Y
-    )
+  IF EXIST "%HERE%\univ-utils\Portforwarded\Portforwarded.Server.exe" (
+    ECHO: & ECHO   %green% Portforwarded FILE Portforwarded.Server.exe SUCCESSFULLY EXTRACTED FROM ZIP %blue% & ECHO:
     ECHO       Going back to UPnP menu ... ... ... & ECHO:
     PAUSE
     GOTO :upnpmenu
   ) ELSE (
-    SET FOUNDUPNPEXE=N
-    ECHO: & ECHO   %green% MINIUPNP BINARY ZIP FILE WAS FOUND TO BE DOWNLOADED %blue% & ECHO   %red% BUT FOR SOME REASON EXTRACTING THE upnpc-static.exe FILE FROM THE ZIP FAILED %blue%
+    ECHO: & ECHO   %green% Portforwarded BINARY ZIP FILE WAS FOUND TO BE DOWNLOADED %blue% & ECHO   %red% BUT FOR SOME REASON EXTRACTING THE Portforwarded.Server.exe FILE FROM THE ZIP FAILED %blue%
     PAUSE 
   )
   GOTO :upnpmenu
@@ -3297,12 +3447,26 @@ ECHO:
 ECHO:
 SET /P SCRATCH="%blue% %green% ENTER new port number, 'default', or 'M' for main menu): %blue% " <nul
 SET /P newport=
-IF /I %newport%==M GOTO :mainmenu
-IF /I %newport%==default (
-  CALL :serverpropsedit server-port 25565
+
+IF /I !newport!==M GOTO :mainmenu
+IF /I !newport!==default (
   SET PORT=25565
-  GOTO :mainmenu
+  CALL :serverpropsedit server-port !PORT!
+  CALL :univ_settings_edit PORT !PORT!
+  GOTO :mainmenu 
 )
+
+IF /I !newport! NEQ default ( ( ECHO !newport! | FINDSTR /R [a-Z] 1>nul 2>nul ) && GOTO :portedit )
+IF !newport! LSS 10000 GOTO :portedit
+SET DUMMY=W
+SET /a DUMMY=%newport%
+IF "!DUMMY!" NEQ "!newport!" GOTO :mainmenu
+
+SET "PORT=!newport!"
+CALL :serverpropsedit server-port !PORT!
+CALL :univ_settings_edit PORT !PORT!
+GOTO :mainmenu
+
 
 :: Evaluates if the entry was a number.  Unsets var and then tries to assign it to the result of the FOR delims.  If it is not defined then it is a number.  If it is defined then it is not a number
 SET "var=" & FOR /f "delims=0123456789" %%i IN ("%newport%") DO SET var=%%i
@@ -3574,7 +3738,7 @@ GOTO:EOF
 :: l_replace function - reworked to allow any variable name passed to alter.  Needs 4 paramters passed.
 
 :: 4 Paramters:     <variable to edit> <string to find> <replacement string> <variable to edit name>
-:: EXAMPLE:         CALL :l_replace_ng "!TEMP!" "=" ";" "TEMP"
+:: EXAMPLE:         CALL :l_replace "!TEMP!" "=" ";" "TEMP"
 
 :: 1= string to edit / 2= find string / 3= replace string / 4= passed variable name
 :l_replace
@@ -3585,3 +3749,25 @@ IF "%%y"=="" SET "%~4=!%~4:~1,-1!" & EXIT /b
 SET "%~4=%%x%~3%%y"
 )
 GOTO :l_replaceloop
+
+:trim
+SET PARAMS=%*
+FOR /F "tokens=1*" %%A IN ("!PARAMS!") SET "%1=%%B"
+EXIT /B
+
+:univ_settings_edit
+
+FOR /F "delims=" %%A IN ('type settings-universalator.txt') DO (
+  FOR /F "tokens=1,2 delims==" %%B IN ("%%A") DO (
+    SET "TEMP=%%B"
+ 
+    IF "%%B" NEQ "SET %~1" ECHO %%A>>x.txt
+    IF "%%B"=="SET %~1" ECHO %%B=%~2>>x.txt
+
+  )
+)
+IF EXIST x.txt (
+  DEL settings-universalator.txt >nul
+  REN x.txt settings-universalator.txt >nul
+)
+GOTO :EOF
