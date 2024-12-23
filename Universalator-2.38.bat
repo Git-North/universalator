@@ -85,6 +85,7 @@ color 1E
 prompt [universalator]:
 ::  The defaut JVM arguments that will print out for use in the settings file that gets created.  Users can edit this settings file to edit their JVM arguments to be used for launching.
 SET "ARGS=-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M"
+
 :: Additional JVM arguments that will always be applied
 SET "OTHERARGS=-XX:+IgnoreUnrecognizedVMOptions -XX:+AlwaysActAsServerClassMachine -Dlog4j2.formatMsgNoLookups=true"
 :: These variables set to exist as blank in case windows is older than 10 and they aren't assigned otherwise
@@ -596,15 +597,16 @@ IF NOT EXIST settings-universalator.txt GOTO :startover
 :mainmenu
 
 TITLE Universalator %UNIV_VERSION%
+Rem ECHO !ARGS!
 IF EXIST settings-universalator.txt (
   :: Reads off the contents of the settings file if it's present, to set current setting values.  Doing it this way avoids needing to rename the file to a .bat or .cmd to perform a CALL.
-  FOR /F "tokens=1,2 delims==" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" (
-    REM Uses replacment to get rid of spaces after the = sign
-    SET "TEMP=%%B"
-    SET "TEMP=!TEMP: =!"
-    SET "VAR=%%A=!TEMP!"
-    !VAR!
+  FOR /F "delims=" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" (
+    SET "TEMP=%%A"
+    REM Uses a trim function to remove spaces at the ends of any line.
+    IF "!TEMP:~-1!"==" " CALL :trim "!TEMP!" TEMP
+    !TEMP!
   )
+
   :: Sets a string variable for passing -Xmx JVM startup argument to java launches, based on the integer entered for number of gigs.
   IF DEFINED MAXRAMGIGS IF [!MAXRAMGIGS!] NEQ [] SET MAXRAM=-Xmx!MAXRAMGIGS!G
   :: The settings txt file has one entry for MODLOADER version.  Depending on the value of MODLOADER, set the variable for whichever modloader type is set equal to the MODLOADERVERSION.
@@ -1251,7 +1253,10 @@ IF !MCMAJOR!==20 IF !MCMINOR! LEQ 5  IF !JAVAVERSION! NEQ 17 IF !JAVAVERSION! NE
 IF !MCMAJOR!==20 IF !MCMINOR! GEQ 6 IF !JAVAVERSION! NEQ 21 GOTO :javaselect
 IF !MCMAJOR! GEQ 21 IF !JAVAVERSION! NEQ 21 GOTO :javaselect
 
-IF DEFINED MAINMENU IF /I !MAINMENU!==J GOTO :setconfig
+IF DEFINED MAINMENU IF /I !MAINMENU!==J (
+  CALL :univ_settings_edit JAVAVERSION !JAVAVERSION!
+  GOTO :mainmenu
+)
 
 :: BEGIN RAM / MEMORY SETTING
 :justsetram
@@ -1305,9 +1310,9 @@ SET /a TEST1=!MAXRAMGIGS!
 IF !MAXRAMGIGS! NEQ !TEST1! GOTO :badramentry
 
 :: Sets the actual MAXRAM variable to launch the server with now that tests have passed.
- SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
+SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
 
-  :: END RAM / MEMORY SETTING
+:: END RAM / MEMORY SETTING
 
 :actuallylaunch
 
@@ -1362,12 +1367,9 @@ IF NOT DEFINED PROTOCOL SET PROTOCOL=TCP
     ECHO :: Whether or not to remember auto port forwarding using UPnP with Portforwarded>>settings-universalator.txt
     ECHO SET USEPORTFORWARDED=!USEPORTFORWARDED!>>settings-universalator.txt
 
-:: Returns to main menu if menu option was only to enter java or ram values
-IF /I !MAINMENU!==R GOTO :mainmenu
-IF /I !MAINMENU!==J GOTO :mainmenu
-IF /I !MAINMENU!==UPNP GOTO :upnpmenu
 
 SET "MAXRAM=-Xmx!MAXRAMGIGS!G"
+IF /I !MAINMENU!==R GOTO :mainmenu
 
 :: Returns to main menu if asking to scan mods is flagged as done previously once before
 :: Otherwise if Y goes to the mod scanning section for each modloader
@@ -2119,8 +2121,8 @@ IF !OVERRIDE!==Y SET "JAVAFILE=java"
 :: If the ARGS setting has not been changed by the user, use no default args for Java 17+.  Newer Java versions are much better at being self-optimizing than older versions.
 :: The user can still totally enter their own custom args if they want!  Or these with literally any tiny number change.
 If !JAVAVERSION! GEQ 17 (
-  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" SET "ARGS="
-)
+  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" ( SET "USEARGS= " ) ELSE ( SET "USEARGS=!ARGS!" )
+) ELSE ( SET "USEARGS=!ARGS!" )
 
 TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 ver >nul
@@ -2147,13 +2149,13 @@ IF !MCMAJOR! GEQ 17 SET LAUNCHFORGE=NEWOLD
 IF !MCMAJOR! EQU 20 IF !MCMINOR! GEQ 4 SET LAUNCHFORGE=NEWNEW
 IF !MCMAJOR! GEQ 21 SET LAUNCHFORGE=NEWNEW
 
-IF !LAUNCHFORGE!==NEWOLD SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
+IF !LAUNCHFORGE!==NEWOLD SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
 
-IF !LAUNCHFORGE!==NEWNEW SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
+IF !LAUNCHFORGE!==NEWNEW SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
 
 IF /I !MODLOADER!==NEOFORGE (
-  IF !MINECRAFT!==1.20.1 SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %%*"
-  IF !MINECRAFT! NEQ 1.20.1 SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %%*"
+  IF !MINECRAFT!==1.20.1 SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %%*"
+  IF !MINECRAFT! NEQ 1.20.1 SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %%*"
 )
 
 REM The launch method depends on whether to use UPNP port forwarding or not.  Strongly tests we really want to do it that way or not.
@@ -2772,17 +2774,17 @@ IF !OVERRIDE!==Y SET "JAVAFILE=java"
 :: If the ARGS setting has not been changed by the user, use no default args for Java 17+.  Newer Java versions are much better at being self-optimizing than older versions.
 :: The user can still totally enter their own custom args if they want!  Or these with literally any tiny number change.
 If !JAVAVERSION! GEQ 17 (
-  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" SET "ARGS="
-)
+  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" ( SET "USEARGS= " ) ELSE ( SET "USEARGS=!ARGS!" )
+) ELSE ( SET "USEARGS=!ARGS!" )
 
 TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 
 :: Actually launch the server!
 
 REM Sets the different launch methods for each type of modloader.
-IF /I !MODLOADER!==FABRIC SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui"
-IF /I !MODLOADER!==QUILT SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui"
-IF /I !MODLOADER!==VANILLA SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar minecraft_server.!MINECRAFT!.jar nogui"
+IF /I !MODLOADER!==FABRIC SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui"
+IF /I !MODLOADER!==QUILT SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui"
+IF /I !MODLOADER!==VANILLA SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! -jar minecraft_server.!MINECRAFT!.jar nogui"
 
 REM The launch method depends on whether to use UPNP port forwarding or not.  Strongly tests we really want to do it that way or not.
 IF DEFINED USEPORTFORWARDED IF !USEPORTFORWARDED!==Y SET LAUNCH=UPNP
@@ -3144,10 +3146,12 @@ IF /I !ENABLEUPNP!==Y (
   SET USEPORTFORWARDED=Y
   ECHO: & ECHO     %green% Portforwarded UPNP port forwarding ENABLED^^! %blue% & ECHO:
   PAUSE
-  GOTO :setconfig
+  CALL :univ_settings_edit USEPORTFORWARDED Y
+  GOTO :upnpmenu
 ) ELSE (
   SET USEPORTFORWARDED=N
-  GOTO :setconfig
+  CALL :univ_settings_edit USEPORTFORWARDED N
+  GOTO :mainmenu
 )
 
 :: END UPNP ACTIVATE PORT FORWARD
@@ -3157,8 +3161,9 @@ IF /I !ENABLEUPNP!==Y (
 
 SET USEPORTFORWARDED=N
 ECHO: & ECHO   %red% Portforwarded UPNP port forwarding Disabled^^! %blue% & ECHO:
+CALL :univ_settings_edit USEPORTFORWARDED N
 PAUSE
-GOTO :setconfig
+GOTO :upnpmenu
 
 ::END UPNP DEACTIVATE PORT FORWARD
 
@@ -3750,10 +3755,8 @@ SET "%~4=%%x%~3%%y"
 )
 GOTO :l_replaceloop
 
-:trim
-SET PARAMS=%*
-FOR /F "tokens=1*" %%A IN ("!PARAMS!") SET "%1=%%B"
-EXIT /B
+
+REM Function to edit the Universalator settings file
 
 :univ_settings_edit
 
@@ -3769,5 +3772,23 @@ FOR /F "delims=" %%A IN ('type settings-universalator.txt') DO (
 IF EXIST x.txt (
   DEL settings-universalator.txt >nul
   REN x.txt settings-universalator.txt >nul
+)
+GOTO :EOF
+
+
+REM Trim function - pass two parameters - CALL :trim variablevalue variablename
+
+REM !TEMP:~-1! - gets the last character
+REM !TEMP:~0,-1!" - gets all but the last character
+
+:trim
+SET "TEMP=%~1"
+:trimagain
+IF "!TEMP:~-1!"==" " (
+  SET "TEMP=!TEMP:~0,-1!"
+  GOTO :trimagain
+) ELSE ( 
+  SET "%~2=!TEMP!"
+  EXIT /B 
 )
 GOTO :EOF
