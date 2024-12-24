@@ -606,6 +606,7 @@ TITLE Universalator %UNIV_VERSION%
 IF EXIST settings-universalator.txt (
   :: Reads off the contents of the settings file if it's present, to set current setting values.  Doing it this way avoids needing to rename the file to a .bat or .cmd to perform a CALL.
   FOR /F "delims=" %%A IN (settings-universalator.txt) DO SET "TEMP=%%A" & IF "!TEMP:~0,2!" NEQ "::" (
+    CLS
     SET "TEMP=%%A"
     REM Uses a trim function to remove spaces at the ends of any line.
     IF "!TEMP:~-1!"==" " CALL :trim "!TEMP!" TEMP
