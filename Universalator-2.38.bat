@@ -124,6 +124,7 @@ IF %winmajor% LEQ 9 (
 IF %winmajor% GEQ 10 (
   SET yellow=[34;103m
   SET blue=[93;44m
+  SET cyan=[34;106m
   SET green=[93;42m
   SET red=[93;101m
 )
@@ -2185,7 +2186,7 @@ IF "!LAUNCH!"=="UPNP" (
 )
 
 REM If not using the UPNP port forwarding, launch the normal way
-IF "!LAUNCH!"=="NORMAL" !JAVAFILE! !LAUNCHLINE!
+IF "!LAUNCH!"=="NORMAL" "!JAVAFILE!" !LAUNCHLINE!
 
 REM Resets console color back to Univ colors
 color 1E
@@ -2813,7 +2814,7 @@ IF "!LAUNCH!"=="UPNP" (
 )
 
 REM If not using the UPNP port forwarding, launch the normal way
-IF "!LAUNCH!"=="NORMAL" !JAVAFILE! !LAUNCHLINE!
+IF "!LAUNCH!"=="NORMAL" "!JAVAFILE!" !LAUNCHLINE!
 
 
 REM Resets console color back to Univ colors
@@ -3083,7 +3084,7 @@ GOTO :upnpmenu
 :upnpvalid
 :: Loops through the status flag -s looking for lines that are different between itself and itself but replacing any found 'Found valid IGD' with random other string.
 SET FOUNDVALIDUPNP=N
-ECHO   Checking for UPnP Enabled Network Router ... ... ...
+ECHO   %cyan% Checking for UPnP Enabled Network Router ... ... ... %blue%
 
 :: Need to use a java verion to use the Portforwarded.Server test - any java will do since old MC 1.4.2 will be use as the tester.  If this finds a java in PATH just go with it.
 ( WHERE java | FINDSTR "java.exe" 2>&1 >nul ) && ( SET "UPNPJAVA=java" )
@@ -3520,13 +3521,17 @@ GOTO :mainmenu
 CLS
 
 ECHO: & ECHO  %yellow% SERVER PROPERTIES - SERVER PROPERTIES %blue% & ECHO:
-:: Prints to screen the desired server properties to display.  
+
+:: Finds the values for each property name to display for editing. Be sure to sort the names alphabetically for the FOR loop!
+:: This method is faster than the older FINDSTR pipe to pipe filtering being used.
 set /a idk=0
-FOR /F tokens^=^1^,^2^ delims^=^= %%A IN (server.properties) DO (
-  ECHO %%A | FINDSTR # >nul || ECHO spawn-protection max-tick-time enforce-whitelist difficulty simulation-distance level-type enable-command-block max-players function-permission-level server-port level-name view-distance white-list level-seed motd region-file-compression | FINDSTR "%%A" >nul && (
-    SET /a idk+=1
-    SET PROP[!idk!]=%%A
-    SET VAL[!idk!]=%%B
+FOR %%A IN (difficulty enable-command-block enforce-whitelist function-permission-level level-name level-seed level-type max-players max-tick-time max-world-size motd region-file-compression server-port simulation-distance spawn-protection view-distance white-list) DO (
+  FINDSTR "%%A" server.properties 1>nul 2>nul && ( 
+    FOR /F "tokens=1,2 delims== " %%X IN ('FINDSTR "%%A" server.properties') DO (
+      SET /a idk+=1
+      SET PROP[!idk!]=%%X
+      SET VAL[!idk!]=%%Y
+    )
   )
 )
 
@@ -3569,7 +3574,7 @@ IF NOT DEFINED var (
   IF %entry1% GTR !idk! ECHO   %red% Invalid entry - number is greater than available options! %blue% & ECHO: & PAUSE & GOTO :editserverprops
   ECHO:
   IF "!PROP[%entry1%]!"=="region-file-compression" (
-    IF !VAL[%entry1%]!==deflate SET entry2=lz4 & ECHO   %yellow% LZ4 compression method set - this will take up more hard drive space for the world folder, %blue% & ECHO   %yellow% but have faster access time performance^^! %blue% & ECHO: & PAUSE
+    IF !VAL[%entry1%]!==deflate SET entry2=lz4 & ECHO: & ECHO: & ECHO: & ECHO   %yellow% LZ4 compression method set - this will take up more hard drive space for the world folder, %blue% & ECHO   %yellow% but have faster access time performance^^! %blue% & ECHO: & PAUSE
     IF !VAL[%entry1%]!==lz4 SET entry2=deflate
     REM Could nest more IF ELSE to make more toggle entries.
   ) ELSE (
