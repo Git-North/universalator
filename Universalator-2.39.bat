@@ -95,6 +95,8 @@ SET "blue="
 SET "HERE=%cd%"
 :: Makes a powershell specific HERE location, installing backquotes before single quotes - to prevent powershell functions breaking.
 SET "HEREPOWERSHELL=%HERE:'=`'%"
+:: Sets a variable to the tab character for later use
+SET "TABCHAR=	"
 
 SET "DELAY=ping -n 2 127.0.0.1 >nul"
 
@@ -1800,9 +1802,7 @@ SET ASKMODSCHECK=N
   SET /P DOSCAN=
   IF /I !DOSCAN! NEQ N IF /I !DOSCAN! NEQ Y GOTO :actuallyscanmods
   IF /I !DOSCAN!==N GOTO :mainmenu
-
-
-
+ 
   ECHO Searching for client only mods . . .
 IF NOT EXIST "%HERE%\univ-utils" MD "univ-utils"
   :: Goes to mods folder and gets file names lists.  FINDSTR prints only files with .jar found
@@ -1888,42 +1888,44 @@ FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
    SET /a MODIDLINE=0
    SET MODID[0]=x
    SET FOUNDMODPLACE=N
-
    REM Sends the mod ID file to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
    REM This is for the purpose of confirming that there is actually an ID file inside to be read by setting an errorlevel
-   tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME! >nul 2>&1
+   
+    tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME! >nul 2>&1 && FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME!') DO (
+    SET "TEMP=%%X"
 
-   IF !ERRORLEVEL!==0 FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME!') DO (
-    
-      SET "TEMP=%%X"
-      IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId=x!" (
-         SET "TEMP=!TEMP: =!"
-         SET "TEMP=!TEMP:%TABCHAR%=!"
-         SET "TEMP=!TEMP:#mandatory=!"
-         :: CALLs a special function to replace equals with underscore characters for easier detection.
-         CALL :l_replace "!TEMP!" "=" ";" "TEMP"
-      )
-      IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId;=x!" (
-      :: Uses special carats to allow using double quotes " as delimiters, to find the modID value.
-      FOR /F delims^=^"^ tokens^=2 %%Y IN ("!TEMP!") DO SET ID=%%Y
-       SET MODID[!MODIDLINE!]=!ID!
-       SET /a MODIDLINE+=1
-       SET FOUNDMODPLACE=DONE
-      )
-      :: Detects if the current line has the [mods] string.  If it does then record to a varaible which will trigger checking for the string modId_ to detect the real modId of this mod file.
-      IF "!TEMP!" NEQ "!TEMP:[mods]=x!" SET FOUNDMODPLACE=Y
+    IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId=x!" (
+      SET "TEMP=!TEMP: =!"
+      SET "TEMP=!TEMP:%TABCHAR%=!"
+      SET "TEMP=!TEMP:#mandatory=!"
+      SET "TEMP=!TEMP:^==!"
+      REM Old replacement function CALL for replacing equals, above is faster.
+      REM CALL :l_replace "!TEMP!" "=" ";" "TEMP"
+        
+      REM Uses special carats to allow using double quotes " as delimiters, to find the modID value. It will probably break all syntax higlighters :)
+      FOR /F delims^=^"^ tokens^=2 %%Y IN ("!TEMP!") DO (
+      SET "MODID[!MODIDLINE!]=%%Y"
+      SET /a MODIDLINE+=1
+      SET FOUNDMODPLACE=DONE
+    )
 
-      :: Detects if the mod file has a value marking the mod as client side or not, this was added to Forge ID files at some point.
-      IF /I "!TEMP!" NEQ "!TEMP:clientSideOnly=x!" IF /I "!TEMP!" NEQ "!TEMP:true=x!" SET SERVERMODS[%%T].clientmarked=Y
-   )
-   SET SERVERMODS[%%T].id=!MODID[0]!
+  )
+  REM Detects if the current line has the [mods] string.  If it does then record to a varaible which will trigger checking for the string modId_ to detect the real modId of this mod file.
+  IF "!TEMP!" NEQ "!TEMP:[mods]=x!" SET FOUNDMODPLACE=Y
 
-   :: Resets the errorlevel
-   ver >nul
-   :: Checks to see if the mod is the 'Essential Mod' - which is a jarmod with no regular ID file, so it will never be picked up by the client scan method.
-   tar -xOf "mods\!SERVERMODS[%%T].file!" *\essential-loader.properties >nul 2>&1
-   IF !ERRORLEVEL!==0 del "mods\!SERVERMODS[%%T].file!" >nul 2>&1
+  REM  Detects if the mod file has a value marking the mod as client side or not, this was added to Forge ID files at some point.
+  IF /I "!TEMP!" NEQ "!TEMP:clientSideOnly=x!" IF /I "!TEMP!" NEQ "!TEMP:true=x!" SET SERVERMODS[%%T].clientmarked=Y
+  )
+  IF DEFINED MODID[0] ( SET "SERVERMODS[%%T].id=!MODID[0]!" ) ELSE ( SET "SERVERMODS[%%T].id=x" )
+  
+  REM Resets the errorlevel
+  ver >nul
+  REM Checks to see if the mod is the 'Essential Mod' - which is a jarmod with no regular ID file, so it will never be picked up by the client scan method.
+  tar -xOf "mods\!SERVERMODS[%%T].file!" *\essential-loader.properties >nul 2>&1 && ( del "mods\!SERVERMODS[%%T].file!" >nul 2>&1 )
+  
 )
+REM If your syntax highlighter thinks the syntax is broken - the above ) is the real end of the servermods FOR /L loop, because of the special delims handling syntax above.
+
 :: Below skips to finishedscan label skipping the next section which is file scanning for old MC versions (1.12.2 and older).
 IF !MCMAJOR! GEQ 13 GOTO :finishedscan
 
@@ -1938,32 +1940,30 @@ IF !MCMAJOR! GEQ 13 GOTO :finishedscan
 :: the script scans to find the modID line.  A fancy function replaces the = sign with _ for easier string comparison to determine if the modID= line was found.
 :: This should ensure that no false positives are recorded.
 
-SET "TABCHAR=	"
 FOR /L %%t IN (0,1,!SERVERMODSCOUNT!) DO (
   SET COUNT=%%t
   SET /a COUNT+=1
   ECHO SCANNING !COUNT!/!ACTUALMODSCOUNT! - !SERVERMODS[%%t].file!
 
   REM Sends the mcmod.info to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
-  tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info >nul 2>&1
 
-  IF !ERRORLEVEL!==0 FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info') DO (
-    :: Sets a temp variable equal to the current line for processing, and replaces " with ; for easier loop delimiting later.
+  tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info >nul 2>&1 && FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info') DO (
+    REM Sets a temp variable equal to the current line for processing, and replaces " with ; for easier loop delimiting later.
     SET "TEMP=%%X"
     SET "TEMP=!TEMP:"=;!"
-    :: If the line contains the modid then further process line and then set ID equal to the actual modid entry.
+    REM If the line contains the modid then further process line and then set ID equal to the actual modid entry.
     IF "!TEMP!" NEQ "!TEMP:;modid;=x!" (
             SET "TEMP=!TEMP:%TABCHAR%=!"
             SET "TEMP=!TEMP: =!"
             SET "TEMP=!TEMP:[=!"
             SET "TEMP=!TEMP:{=!"
       FOR /F "tokens=3 delims=;" %%Y IN ("!TEMP!") DO (
-        SET SERVERMODS[%%t].id=%%Y
+        SET "SERVERMODS[%%t].id=%%Y"
       )
     )
   )
-  :: If ID was found record it to the array entry of the current mod number, otherwise set the ID of that mod equal to a dummy string x.
-  IF NOT DEFINED SERVERMODS[%%t].id SET SERVERMODS[%%t].id=x
+  REM If ID was found record it to the array entry of the current mod number, otherwise set the ID of that mod equal to a dummy string x.
+  IF NOT DEFINED SERVERMODS[%%t].id SET "SERVERMODS[%%t].id=x"
 )
 :: END SCANNING OLD STYLE MCMOD.INFO
 :finishedscan
@@ -1977,21 +1977,22 @@ FOR /L %%b IN (0,1,!SERVERMODSCOUNT!) DO (
 
   IF !SERVERMODS[%%b].clientmarked!==Y (
     SET /a NUMCLIENTS+=1
-    SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
-    SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+    SET "FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!"
+    SET "FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!""
   ) ELSE (
-    :: Runs a FINDSTR to see if the string of the modID is found on a line.  This needs further checks to guarantee the modID is the entire line and not just part of it.
-    FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt >nul
+
+    REM Runs a FINDSTR to see if the string of the modID is found on a line.  This needs further checks to guarantee the modID is the entire line and not just part of it.
+    
   
     REM If errorlevel is 0 then the FINDSTR above found the modID.  The line returned by the FINDSTR can be captured into a variable by using a FOR loop.
     REM That variable is compared to the server modID in question.  If they are equal then it is a definite match and the modID and filename are recorded to a list of client only mods found.
-    IF !ERRORLEVEL!==0 (
+    FINDSTR /I /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt >nul && (
       FOR /F "delims=" %%A IN ('FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt') DO (
 
         IF /I !SERVERMODS[%%b].id!==%%A (
           SET /a NUMCLIENTS+=1
-          SET FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!
-          SET FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!
+          SET "FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!"
+          SET "FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!"
         )
       )
     )
@@ -2138,8 +2139,10 @@ IF !OVERRIDE!==Y SET "JAVAFILE=java"
 :: If the ARGS setting has not been changed by the user, use no default args for Java 17+.  Newer Java versions are much better at being self-optimizing than older versions.
 :: The user can still totally enter their own custom args if they want!  Or these with literally any tiny number change.
 If !JAVAVERSION! GEQ 17 (
-  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" ( SET "USEARGS= " ) ELSE ( SET "USEARGS=!ARGS!" )
+  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" ( SET "USEARGS=" ) ELSE ( SET "USEARGS=!ARGS!" )
 ) ELSE ( SET "USEARGS=!ARGS!" )
+:: Makes a final combined args.
+IF DEFINED USEARGS ( SET "USEARGS=!USEARGS! !OTHERARGS!" ) ELSE ( SET "USEARGS=!OTHERARGS!" )
 
 TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 ver >nul
@@ -2158,7 +2161,7 @@ IF !MCMAJOR! LEQ 16 (
     GOTO :mainmenu
   )
   REM Sets the launch line for all MC  1.16 and older
-  SET "LAUNCHLINE=!MAXRAM! !ARGS! !OTHERARGS! -jar !FORGEFILE! nogui"
+  SET "LAUNCHLINE=!MAXRAM! !USEARGS! -jar !FORGEFILE! nogui"
 )
  
 :: Launching Minecraft versions 1.17 and newer.  As of 1.20.4 Forge went back to an executable JAR file that gets put in the main directory.
@@ -2166,13 +2169,13 @@ IF !MCMAJOR! GEQ 17 SET LAUNCHFORGE=NEWOLD
 IF !MCMAJOR! EQU 20 IF !MCMINOR! GEQ 4 SET LAUNCHFORGE=NEWNEW
 IF !MCMAJOR! GEQ 21 SET LAUNCHFORGE=NEWNEW
 
-IF !LAUNCHFORGE!==NEWOLD SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
+IF !LAUNCHFORGE!==NEWOLD SET "LAUNCHLINE=!MAXRAM! !USEARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
 
-IF !LAUNCHFORGE!==NEWNEW SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
+IF !LAUNCHFORGE!==NEWNEW SET "LAUNCHLINE=!MAXRAM! !USEARGS! @libraries/net/minecraftforge/forge/!MINECRAFT!-!FORGE!/win_args.txt nogui %%*"
 
 IF /I !MODLOADER!==NEOFORGE (
-  IF !MINECRAFT!==1.20.1 SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %%*"
-  IF !MINECRAFT! NEQ 1.20.1 SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %%*"
+  IF !MINECRAFT!==1.20.1 SET "LAUNCHLINE=!MAXRAM! !USEARGS! @libraries/net/neoforged/forge/!MINECRAFT!-!NEOFORGE!/win_args.txt nogui %%*"
+  IF !MINECRAFT! NEQ 1.20.1 SET "LAUNCHLINE=!MAXRAM! !USEARGS! @libraries/net/neoforged/neoforge/!NEOFORGE!/win_args.txt nogui %%*"
 )
 
 REM The launch method depends on whether to use UPNP port forwarding or not.  Strongly tests we really want to do it that way or not.
@@ -2405,11 +2408,9 @@ GOTO :preparequilt
 :scanfabric
 
 ECHO:
-ECHO Searching for client mods . . .
 
 IF EXIST univ-utils\allfabricdeps.txt DEL univ-utils\allfabricdeps.txt >nul
-:: Some mod authors enter tab characters instead of spaces in their JSON/TOML files which messes up the delimiting.  A tab character is recorded in this variable to later void the tab char by replacement in strings of interest.
-SET "TABCHAR=	"
+
 :: This variable is for a trigger to determine at the end if any client mods at all were found.
 SET FOUNDFABRICCLIENTS=N
 
@@ -2422,6 +2423,7 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
   SET /a COUNT+=1
   :: Starts a variable to keep things appended to the .deps variable surrounded in semicolons.
   SET "SERVERMODS[%%f].deps=;"
+  SET FOUNDID=N
 
   ECHO SCANNING !COUNT!/%ACTUALMODSCOUNT% - !SERVERMODS[%%f].file!
 
@@ -2438,7 +2440,7 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
     REM If the line contains the modid then further process line and then set ID equal to the actual modid entry.
     REM AND takes care of all JSONs which are formatted on one line only.
     IF "!TEMP!" NEQ "!TEMP:;id;=x!" (
-      IF !JSONLINE! NEQ 0 (
+      IF !JSONLINE! NEQ 0 IF !FOUNDID!==N (
         :: MULTI LINE ID
         SET "TEMP=!TEMP:%TABCHAR%=!"
         SET "TEMP=!TEMP: =!"
@@ -2448,7 +2450,9 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
         SET "TEMP=!TEMP:\u003e=!"
         REM Normal id delims detection
         FOR /F "tokens=1-3 delims=;" %%Q IN ("!TEMP!") DO (
-          SET SERVERMODS[%%f].id=%%R
+          SET "SERVERMODS[%%f].id=%%R"
+          REM Sets FOUNDID to prevent triggering later if another line contains ;id;
+          SET FOUNDID=Y
         )
       ) ELSE (
       :: This ELSE will be all times when the line number is 0 and modID is found, meaning a 1-line fabric.mod.json - Do all 1-line JSON processing here
@@ -2459,7 +2463,7 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
         REM Sets single quotes in file names to have a powershell escape character in front.
         SET "THISFILENAME=mods\!SERVERMODS[%%f].file!"
         SET "THISFILENAME=!THISFILENAME:'=`'!"
-        FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.id"') DO ( SET SERVERMODS[%%f].id=%%A )
+        FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.id"') DO ( SET "SERVERMODS[%%f].id=%%A" )
 
         REM SINGLE LINE DEPENDENCIES
         REM Makes a list of dependencies excluding a few to be ignored.  Semicolons used as a spacer in the holder variable.  If someone uses a semicolon in their dependency name, I swear to god...
@@ -2469,13 +2473,13 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
 
         REM SINGLE LINE ENVIRONMENT
         FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.environment"') DO (
-          IF /I "%%A"=="client" ( SET SERVERMODS[%%f].environ=C ) ELSE ( SET SERVERMODS[%%f].environ=N )
+          IF /I "%%A"=="client" ( SET "SERVERMODS[%%f].environ=C" ) ELSE ( SET "SERVERMODS[%%f].environ=N" )
         )
       )
     )
     :: MULT LINE ENVIRONMENT
     REM Detects with the string replacement method if the enviroment value is present, and then if found whether the client entry is present.  Otherwise if environment is found but client not - mark mod as not client.
-    IF "!TEMP!" NEQ "!TEMP:;environment;=x!" (
+    IF !JSONLINE! NEQ 0 IF "!TEMP!" NEQ "!TEMP:;environment;=x!" (
       IF "!TEMP!" NEQ "!TEMP:client=x!" IF "!SERVERMODS[%%f].id!" NEQ "modmenu" (
         SET SERVERMODS[%%f].environ=C
         SET FOUNDFABRICCLIENTS=Y
@@ -2484,18 +2488,18 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
 
     :: MULTI LINE DEPENDENCIES
     REM If the depends value was found in a previous loop but the }, string is found - set the FOUDNDEPENDS variable back equal to N to stop recording entries.
-    IF !FOUNDDEPENDS!==Y IF "!TEMP!" NEQ "!TEMP:},=x!" SET FOUNDDEPENDS=N
+    IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==Y IF "!TEMP!" NEQ "!TEMP:},=x!" SET FOUNDDEPENDS=N
     REM If the depends value was found in a previous loop and no JSON value ending strings are found - record the dependency entry (ignores common entries that aren't relevant)
-    IF !FOUNDDEPENDS!==Y IF "!TEMP!"=="!TEMP:}=x!" IF "!TEMP!"=="!TEMP:]=x!" (
+     IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==Y IF "!TEMP!"=="!TEMP:}=x!" IF "!TEMP!"=="!TEMP:]=x!" (
       SET "TEMP=!TEMP:%TABCHAR%=!"
       SET "TEMP=!TEMP: =!"
       SET "TEMP=!TEMP::=!"
-      IF !FOUNDDEPENDS!==Y FOR /F "delims=;" %%g IN ("!TEMP!") DO (
+       IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==Y FOR /F "delims=;" %%g IN ("!TEMP!") DO (
         IF %%g NEQ fabricloader IF %%g NEQ minecraft IF %%g NEQ fabric IF %%g NEQ java IF %%g NEQ cloth-config IF %%g NEQ cloth-config2 IF %%g NEQ fabric-language-kotlin IF %%g NEQ iceberg IF %%g NEQ fabric-resource-loader-v0 IF %%g NEQ creativecore IF %%g NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%g;"
        )
     )
     REM If the depends string is found set FOUNDDEPENDS Y for discovery in the next loop iteration.
-    IF !FOUNDDEPENDS!==N IF "!TEMP!" NEQ "!TEMP:;depends;=x!" SET FOUNDDEPENDS=Y
+    IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==N IF "!TEMP!" NEQ "!TEMP:;depends;=x!" SET FOUNDDEPENDS=Y
     REM Increases the integer value of JSONLINE - this variable is only used to determine if the JSON is the compact 1 line version or has multiple lines.
     SET /a JSONLINE+=1
   ) ELSE (
@@ -2507,9 +2511,9 @@ FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
       SET "THISFILENAME=mods\!SERVERMODS[%%f].file!"
       SET "THISFILENAME=!THISFILENAME:'=`'!"
 
-      FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.id"') DO SET SERVERMODS[%%f].id=%%A
+      FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.id"') DO SET "SERVERMODS[%%f].id=%%A"
       FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.minecraft.environment"') DO (
-        IF "%%A"=="client" IF "!SERVERMODS[%%f].id!" NEQ "modmenu" ( SET SERVERMODS[%%f].environ=C ) ELSE ( SET SERVERMODS[%%f].environ=N )
+        IF "%%A"=="client" IF "!SERVERMODS[%%f].id!" NEQ "modmenu" ( SET "SERVERMODS[%%f].environ=C" ) ELSE ( SET "SERVERMODS[%%f].environ=N" )
       )
       FOR /F %%B IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.depends.id"') DO (
         IF %%B NEQ quilt_loader IF %%B NEQ minecraft IF %%B NEQ quilt_base IF %%B NEQ java IF %%B NEQ cloth-config IF %%B NEQ cloth-config2 IF %%B NEQ fabric-language-kotlin IF %%B NEQ iceberg IF %%B NEQ quilted_fabric_api IF %%B NEQ creativecore IF %%B NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%B;"
@@ -2546,6 +2550,7 @@ FOR /L %%r IN (0,1,!SERVERMODSCOUNT!) DO (
     )
   )
 )
+
 DEL fabricdeps.txt >nul 2>&1
 
   :: Prints report to user - echos all entries without the modID name = forge
@@ -2609,7 +2614,7 @@ FOR /L %%D IN (0,1,!CLIENTSCOUNT!) DO (
   )
   ECHO:
   ECHO      %yellow%   CLIENT MODS MOVED TO THIS FOLDER AS STORAGE:     %blue%
-  ECHO      %yellow%   "%HERE%\CLIENTMODS" 
+  ECHO      %yellow%   "%HERE%\CLIENTMODS" %blue%
   ECHO:
   ECHO:
   ECHO      %yellow% -PRESS ANY KEY TO CONTINUE- %blue%
@@ -2791,17 +2796,19 @@ IF !OVERRIDE!==Y SET "JAVAFILE=java"
 :: If the ARGS setting has not been changed by the user, use no default args for Java 17+.  Newer Java versions are much better at being self-optimizing than older versions.
 :: The user can still totally enter their own custom args if they want!  Or these with literally any tiny number change.
 If !JAVAVERSION! GEQ 17 (
-  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" ( SET "USEARGS= " ) ELSE ( SET "USEARGS=!ARGS!" )
+  IF "!ARGS!"=="-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646 -XX:+UnlockExperimentalVMOptions -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M" ( SET "USEARGS=" ) ELSE ( SET "USEARGS=!ARGS!" )
 ) ELSE ( SET "USEARGS=!ARGS!" )
+:: Makes a final combined args.
+IF DEFINED USEARGS ( SET "USEARGS=!USEARGS! !OTHERARGS!" ) ELSE ( SET "USEARGS=!OTHERARGS!" )
 
 TITLE Universalator %UNIV_VERSION% - !MINECRAFT! !MODLOADER!
 
 :: Actually launch the server!
 
 REM Sets the different launch methods for each type of modloader.
-IF /I !MODLOADER!==FABRIC SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui"
-IF /I !MODLOADER!==QUILT SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui"
-IF /I !MODLOADER!==VANILLA SET "LAUNCHLINE=!MAXRAM! !USEARGS! !OTHERARGS! -jar minecraft_server.!MINECRAFT!.jar nogui"
+IF /I !MODLOADER!==FABRIC SET "LAUNCHLINE=!MAXRAM! !USEARGS! -jar fabric-server-launch-!FABRICMCNAME!-!FABRICLOADER!.jar nogui"
+IF /I !MODLOADER!==QUILT SET "LAUNCHLINE=!MAXRAM! !USEARGS! -jar quilt-server-launch-!QUILTMCNAME!-!QUILTLOADER!.jar nogui"
+IF /I !MODLOADER!==VANILLA SET "LAUNCHLINE=!MAXRAM! !USEARGS! -jar minecraft_server.!MINECRAFT!.jar nogui"
 
 REM The launch method depends on whether to use UPNP port forwarding or not.  Strongly tests we really want to do it that way or not.
 IF DEFINED USEPORTFORWARDED IF !USEPORTFORWARDED!==Y SET LAUNCH=UPNP
