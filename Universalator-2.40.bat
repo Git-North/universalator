@@ -180,7 +180,6 @@ FOR %%X IN (_JAVA_OPTIONS JDK_JAVA_OPTIONS JAVA_TOOL_OPTIONS) DO (
     PAUSE & EXIT [\B]
     )
   )
-
 )
 
 :: The below SET PATH only applies to this command window launch and isn't permanent to the system's PATH.
@@ -1277,27 +1276,18 @@ IF DEFINED MAINMENU IF /I !MAINMENU!==J (
 :: BEGIN RAM / MEMORY SETTING
 :justsetram
 :: Uses the systeminfo command to get the total and available/free ram/memory on the computer.
-FOR /F "delims=" %%D IN ('systeminfo') DO (
-    SET INFO=%%D
-    IF "!INFO!" NEQ "!INFO:Total Physical Memory=tot!" SET RAWTOTALRAM=%%D
-    IF "!INFO!" NEQ "!INFO:Available Physical Memory=free!" SET RAWFREERAM=%%D
+
+FOR /F "tokens=1,2 delims=:" %%A IN ('powershell -Command "$mem = Get-CimInstance Win32_OperatingSystem; $total = [math]::Round($mem.TotalVisibleMemorySize / 1MB, 1); $free = [math]::Round($mem.FreePhysicalMemory / 1MB, 1); Write-Output ${free}:${total}"') DO (
+  SET "TOTALRAM=%%B"
+  SET "FREERAM=%%A"
 )
-FOR /F "tokens=4,5 delims=, " %%E IN ("!RAWTOTALRAM!") DO (
-    SET /a TOTALRAM=%%E
-    SET AFTERCOMMATOTAL=%%F
-    SET /a DECIMALTOTAL=!AFTERCOMMATOTAL:~0,1!
-)
-FOR /F "tokens=4,5 delims=, " %%E IN ("!RAWFREERAM!") DO (
-    SET /a FREERAM=%%E
-    SET AFTERCOMMAFREE=%%F
-    SET /a DECIMALFREE=!AFTERCOMMAFREE:~0,1!
-)
+
 :badramentry
 :: Ram / Memory setting amount entry menu
   CLS
   ECHO: & ECHO:
-  ECHO %yellow%    Computer Total Total Memory/RAM     %blue% = %yellow% !TOTALRAM!.!DECIMALTOTAL! Gigabytes (GB) %blue%
-  ECHO %yellow%    Current Available (Free) Memory/RAM %blue% = %yellow% !FREERAM!.!DECIMALFREE! Gigabytes (GB) %blue%
+  ECHO %yellow%    Computer Total Total Memory/RAM     %blue% = %yellow% !TOTALRAM! Gigabytes (GB) %blue%
+  ECHO %yellow%    Current Available (Free) Memory/RAM %blue% = %yellow% !FREERAM! Gigabytes (GB) %blue%
   ECHO:
   ECHO: & ECHO:
   ECHO: & ECHO: & ECHO: & ECHO:
@@ -1434,6 +1424,21 @@ IF !JAVAVERSION!==17 SET FINDFOLDER=jdk-17
 IF !JAVAVERSION!==21 SET FINDFOLDER=jdk-21
 
 :checkforjava
+
+REM Eventual code to use detected system installed Javas if they match the version being launched and are newer than some set time.
+
+REM SET JAVATYPE=A
+REM FOR /F "delims=" %%A IN ('powershell -NoProfile -Command "$ver='%JAVAVER%'; $sixMonthsAgo = (Get-Date).AddMonths(-6); $paths = @('C:\Program Files', 'C:\Program Files\Java', 'C:\Program Files\Eclipse Adoptium', 'C:\Program Files\Eclipse Foundation'); foreach ($p in $paths) { if (Test-Path $p) { Get-ChildItem $p -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \""^(jdk-?$ver|temurin-$ver|jre-?$ver|temurin-jre-$ver)\"" } | ForEach-Object { $ageTag = if ($_.CreationTime -lt $sixMonthsAgo) { 'old#' } else { 'new#' }; $ageTag + $_.FullName } } }"') DO (
+REM   FOR /F "tokens=1-2, delims=#" %%B IN ("%%A") DO (
+REM     IF /I "%%B"=="new" IF EXIST "%%C\bin\java.exe" (
+REM       SET "JAVAFOLDER=%%C"
+REM       SET "JAVAFILE=%%C\bin\java.exe"
+REM       SET JAVATYPE=S
+REM       GOTO :javafileisset
+REM     )
+REM   )
+REM )
+
 IF NOT EXIST "%HERE%\univ-utils\java" MD "%HERE%\univ-utils\java"
 ver >nul
 
@@ -1552,10 +1557,10 @@ REM Sends the script back to the beginning of the java section to check for and 
 GOTO :checkforjava
 :javafileisset
 
-SET "JAVANUM=!JAVAFOLDER:jdk-=!"
-SET "JAVANUM=!JAVANUM:-jdk=!"
-SET "JAVANUM=!JAVANUM:-jre=!"
-SET "JAVANUM=!JAVANUM:-LTS=!"
+  SET "JAVANUM=!JAVAFOLDER:jdk-=!"
+  SET "JAVANUM=!JAVANUM:-jdk=!"
+  SET "JAVANUM=!JAVANUM:-jre=!"
+  SET "JAVANUM=!JAVANUM:-LTS=!"
 
 IF DEFINED GETUPNPJAVA GOTO :returnjavaupnp
 
@@ -1682,7 +1687,7 @@ GOTO :pingforgeagain
 IF EXIST forge-installer.jar (
   ECHO   Installer downloaded. Installing... & ECHO:
   %DELAY%
-  "%JAVAFILE%" -Djava.net.preferIPv4Stack=true -XX:+UseG1GC -jar forge-installer.jar --installServer
+  "!JAVAFILE!" -Djava.net.preferIPv4Stack=true -XX:+UseG1GC -jar forge-installer.jar --installServer
   DEL forge-installer.jar >nul 2>&1
   DEL forge-installer.jar.log >nul 2>&1
   %DELAY%
@@ -1764,8 +1769,8 @@ IF /I !MAINMENU!==L IF /I !MODLOADER!==FABRIC GOTO :fabricmain
 IF NOT EXIST mods (
   CLS
   ECHO: & ECHO: & ECHO: & ECHO   %yellow% CLIENT MOD SCANNING - CLIENT MOD SCANNING %blue% & ECHO: & ECHO:
-  ECHO     No folder named 'mods' was found in the directory that the Universalator program was run from! & ECHO:
-  ECHO     Either you have forgotten to copy a 'mods' folder to this folder location,
+  ECHO     %red% NO FOLDER named 'mods' was found in the directory that the Universalator program was run from^^! %blue% & ECHO:
+  ECHO     %yellow% Either %blue% you have forgotten to copy a 'mods' folder to this folder location,
   ECHO     or you did not copy and run this program to the server folder with the server files. & ECHO: & ECHO:
   ECHO   %yellow% CLIENT MOD SCANNING - CLIENT MOD SCANNING %blue% & ECHO: & ECHO: & ECHO:
   PAUSE
@@ -1775,7 +1780,7 @@ IF NOT EXIST mods (
 DIR /b "mods\*.jar" 2>nul | FINDSTR .>nul || (
   CLS
   ECHO: & ECHO: & ECHO: & ECHO   %yellow% CLIENT MOD SCANNING - CLIENT MOD SCANNING %blue% & ECHO: & ECHO:
-  ECHO      A folder named 'mods' was found but it is empty! & ECHO: & ECHO:
+  ECHO      A folder named 'mods' was found but it is %red% empty^^! %blue% & ECHO: & ECHO:
   ECHO   %yellow% CLIENT MOD SCANNING - CLIENT MOD SCANNING %blue% & ECHO: & ECHO: & ECHO:
   PAUSE
   GOTO :mainmenu
@@ -1803,7 +1808,7 @@ SET ASKMODSCHECK=N
   IF /I !DOSCAN! NEQ N IF /I !DOSCAN! NEQ Y GOTO :actuallyscanmods
   IF /I !DOSCAN!==N GOTO :mainmenu
  
-  ECHO Searching for client only mods . . .
+
 IF NOT EXIST "%HERE%\univ-utils" MD "univ-utils"
   :: Goes to mods folder and gets file names lists.  FINDSTR prints only files with .jar found
 
@@ -1812,31 +1817,13 @@ IF NOT EXIST "%HERE%\univ-utils" MD "univ-utils"
 :: filenames with exclamation marks in the name.  eol=| ensures that filenames with some weird characters aren't ignored.
 
 SET /a SERVERMODSCOUNT=0
-PUSHD mods
-setlocal enableextensions
-setlocal disabledelayedexpansion
- FOR /F "eol=| delims=" %%J IN ('"dir *.jar /b /a-d"') DO (
-  IF %%J NEQ [] SET "FILENAME=%%J"
-    CALL :functionfilenames
-    )
-setlocal enabledelayedexpansion
-POPD
 
-GOTO :skipfunctionfilenames
-:functionfilenames
-    SET "SERVERMODS[%SERVERMODSCOUNT%].file=%FILENAME%"
-    SET /a SERVERMODSCOUNT+=1
-    GOTO :EOF
-:skipfunctionfilenames
+REM Just gets a total count of jar files for later use 
+FOR %%J IN ("mods/*.jar") DO ( SET /a SERVERMODSCOUNT+=1 )
 
-:: CORRECTS THE MOD COUNT TO NOT INCLUDE THE LAST COUNT NUMBER ADDED
-SET /a SERVERMODSCOUNT-=1
+ECHO: & ECHO   %yellow% Found - !SERVERMODSCOUNT! - jar files in 'mods' folder %blue% & ECHO: & ECHO   %yellow% Searching for client only mods... %blue% & ECHO: & ECHO   Please wait... & ECHO:
 
-:: ACTUALMODSCOUNT is just to set a file count number that starts the count at 1 for the printout progress ECHOs.
-SET ACTUALMODSCOUNT=!SERVERMODSCOUNT!
-SET /a ACTUALMODSCOUNT+=1
-
-
+:: Redirects to the Fabric/Quilt section if that's the modloader type set.
 IF /I !MODLOADER!==FABRIC GOTO :scanfabric
 IF /I !MODLOADER!==QUILT GOTO :scanfabric
 
@@ -1845,150 +1832,61 @@ IF EXIST univ-utils\foundclients.txt DEL univ-utils\foundclients.txt
 IF EXIST univ-utils\allmodidsandfiles.txt DEL univ-utils\allmodidsandfiles.txt
 
 
-  REM Checks to see if clientonlymods.txt exists, if it does check the age and delete to refresh if older than 1 day.  Then downloads file if it does not exist.
-  IF EXIST "univ-utils\clientonlymods.txt" (
-    FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddHours(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
-  )
-  IF NOT EXIST "univ-utils\clientonlymods.txt" powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/nanonestor/utilities/main/clientonlymods.txt', 'univ-utils/clientonlymods.txt')" >nul
-
-  REM Checks if the file is empty.
-  IF EXIST "univ-utils\clientonlymods.txt" SET /P EMPTYCHECK=<"univ-utils\clientonlymods.txt"
-  IF NOT EXIST "univ-utils\clientonlymods.txt" SET EMPTYCHECK=""
-  IF [!EMPTYCHECK!]==[] (
-    CLS
-    ECHO:
-    ECHO:
-    ECHO   SOMETHING WENT WRONG DOWNLOADING THE MASTER CLIENT-ONLY LIST FROM THE GITHUB HOSTED LIST
-    ECHO   CHECK THAT YOU HAVE NO ANTIVIRUS PROGRAM OR WINDOWS DEFENDER BLOCKING THE DOWNLOAD FROM -
-    ECHO:
-    ECHO   https://raw.githubusercontent.com/nanonestor/utilities/main/clientonlymods.txt
-    ECHO:
-    PAUSE & EXIT [\B]
-  )
-
-:: If MC version is old (MC <1.12.2) then skips ahead to old mod info file.
-IF !MCMAJOR! LEQ 12 GOTO :scanmcmodinfo
-
-:: BEGIN SCANNING NEW STYLE (MC >1.12.2) mods.toml FILES IN MODS
-
-:: Set a variable for which name the mod ID file should be to read.  Neoforge 1.20.4 and older still used mods.toml
-IF /I !MODLOADER!==FORGE SET "MODIDFILENAME=mods.toml"
-IF /I !MODLOADER!==NEOFORGE SET "MODIDFILENAME=neoforge.mods.toml"
-IF /I !MODLOADER!==NEOFORGE IF !MCMAJOR!==20 IF !MCMINOR! LEQ 4 SET "MODIDFILENAME=mods.toml"
-
-:: For each found jar file - uses tar command to output using STDOUT the contents of the mods.toml.  For each line in the STDOUT output the line is checked.
-:: First a trigger is needed to determine if the [mods] section has been detected yet in the JSON.  Once that trigger variable has been set to Y then 
-:: the script scans to find the modID line.  A fancy function replaces the = sign with _ for easier string comparison to determine if the modID= line was found.
-:: This should ensure that no false positives are recorded.
-
-FOR /L %%T IN (0,1,!SERVERMODSCOUNT!) DO (
-   SET COUNT=%%T
-   SET /a COUNT+=1
-   ECHO SCANNING !COUNT!/!ACTUALMODSCOUNT! - !SERVERMODS[%%T].file!
-   SET /a MODIDLINE=0
-   SET MODID[0]=x
-   SET FOUNDMODPLACE=N
-   REM Sends the mod ID file to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
-   REM This is for the purpose of confirming that there is actually an ID file inside to be read by setting an errorlevel
-   
-    tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME! >nul 2>&1 && FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%T].file!" *\!MODIDFILENAME!') DO (
-    SET "TEMP=%%X"
-
-    IF !FOUNDMODPLACE!==Y IF "!TEMP!" NEQ "!TEMP:modId=x!" (
-      SET "TEMP=!TEMP: =!"
-      SET "TEMP=!TEMP:%TABCHAR%=!"
-      SET "TEMP=!TEMP:#mandatory=!"
-      SET "TEMP=!TEMP:^==!"
-      REM Old replacement function CALL for replacing equals, above is faster.
-      REM CALL :l_replace "!TEMP!" "=" ";" "TEMP"
-        
-      REM Uses special carats to allow using double quotes " as delimiters, to find the modID value. It will probably break all syntax higlighters :)
-      FOR /F delims^=^"^ tokens^=2 %%Y IN ("!TEMP!") DO (
-      SET "MODID[!MODIDLINE!]=%%Y"
-      SET /a MODIDLINE+=1
-      SET FOUNDMODPLACE=DONE
-    )
-
-  )
-  REM Detects if the current line has the [mods] string.  If it does then record to a varaible which will trigger checking for the string modId_ to detect the real modId of this mod file.
-  IF "!TEMP!" NEQ "!TEMP:[mods]=x!" SET FOUNDMODPLACE=Y
-
-  REM  Detects if the mod file has a value marking the mod as client side or not, this was added to Forge ID files at some point.
-  IF /I "!TEMP!" NEQ "!TEMP:clientSideOnly=x!" IF /I "!TEMP!" NEQ "!TEMP:true=x!" SET SERVERMODS[%%T].clientmarked=Y
-  )
-  IF DEFINED MODID[0] ( SET "SERVERMODS[%%T].id=!MODID[0]!" ) ELSE ( SET "SERVERMODS[%%T].id=x" )
-  
-  REM Resets the errorlevel
-  ver >nul
-  REM Checks to see if the mod is the 'Essential Mod' - which is a jarmod with no regular ID file, so it will never be picked up by the client scan method.
-  tar -xOf "mods\!SERVERMODS[%%T].file!" *\essential-loader.properties >nul 2>&1 && ( del "mods\!SERVERMODS[%%T].file!" >nul 2>&1 )
-  
+REM Checks to see if clientonlymods.txt exists, if it does check the age and delete to refresh if older than 1 day.  Then downloads file if it does not exist.
+IF EXIST "univ-utils\clientonlymods.txt" (
+  FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\clientonlymods.txt' -OlderThan (Get-Date).AddHours(-1)"') DO ( IF %%G==True DEL "univ-utils\clientonlymods.txt" )
 )
-REM If your syntax highlighter thinks the syntax is broken - the above ) is the real end of the servermods FOR /L loop, because of the special delims handling syntax above.
+IF NOT EXIST "univ-utils\clientonlymods.txt" powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/nanonestor/utilities/main/clientonlymods.txt', 'univ-utils/clientonlymods.txt')" >nul
 
-:: Below skips to finishedscan label skipping the next section which is file scanning for old MC versions (1.12.2 and older).
-IF !MCMAJOR! GEQ 13 GOTO :finishedscan
-
-
-:: END SCANNING NEW STYLE MODS.TOML / NEOFORGE.MODS.TOML
-:: BEGIN SCANNING OLD STYLE MCMOD.INFO
-
-
-:scanmcmodinfo
-:: For each found jar file - uses tar command to output using STDOUT the contents of the mods.toml.  For each line in the STDOUT output the line is checked.
-:: First a trigger is needed to determine if the [mods] section has been detected yet in the JSON.  Once that trigger variable has been set to Y then 
-:: the script scans to find the modID line.  A fancy function replaces the = sign with _ for easier string comparison to determine if the modID= line was found.
-:: This should ensure that no false positives are recorded.
-
-FOR /L %%t IN (0,1,!SERVERMODSCOUNT!) DO (
-  SET COUNT=%%t
-  SET /a COUNT+=1
-  ECHO SCANNING !COUNT!/!ACTUALMODSCOUNT! - !SERVERMODS[%%t].file!
-
-  REM Sends the mcmod.info to standard output using the tar command in order to set the ERRORLEVEL - actual output and error output silenced
-
-  tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info >nul 2>&1 && FOR /F "delims=" %%X IN ('tar -xOf "mods\!SERVERMODS[%%t].file!" mcmod.info') DO (
-    REM Sets a temp variable equal to the current line for processing, and replaces " with ; for easier loop delimiting later.
-    SET "TEMP=%%X"
-    SET "TEMP=!TEMP:"=;!"
-    REM If the line contains the modid then further process line and then set ID equal to the actual modid entry.
-    IF "!TEMP!" NEQ "!TEMP:;modid;=x!" (
-            SET "TEMP=!TEMP:%TABCHAR%=!"
-            SET "TEMP=!TEMP: =!"
-            SET "TEMP=!TEMP:[=!"
-            SET "TEMP=!TEMP:{=!"
-      FOR /F "tokens=3 delims=;" %%Y IN ("!TEMP!") DO (
-        SET "SERVERMODS[%%t].id=%%Y"
-      )
-    )
-  )
-  REM If ID was found record it to the array entry of the current mod number, otherwise set the ID of that mod equal to a dummy string x.
-  IF NOT DEFINED SERVERMODS[%%t].id SET "SERVERMODS[%%t].id=x"
+REM Checks if the file is empty.
+IF EXIST "univ-utils\clientonlymods.txt" SET /P EMPTYCHECK=<"univ-utils\clientonlymods.txt"
+IF NOT EXIST "univ-utils\clientonlymods.txt" SET EMPTYCHECK=""
+IF [!EMPTYCHECK!]==[] (
+  CLS
+  ECHO: & ECHO:
+  ECHO   SOMETHING WENT WRONG DOWNLOADING THE MASTER CLIENT-ONLY LIST FROM THE GITHUB HOSTED LIST
+  ECHO   CHECK THAT YOU HAVE NO ANTIVIRUS PROGRAM OR WINDOWS DEFENDER BLOCKING THE DOWNLOAD FROM - & ECHO:
+  ECHO   https://raw.githubusercontent.com/nanonestor/utilities/main/clientonlymods.txt & ECHO:
+  PAUSE & EXIT [\B]
 )
-:: END SCANNING OLD STYLE MCMOD.INFO
-:finishedscan
+
+:: NEW STYLE (MC >1.12.2) mods.toml FILES IN MODS
+:: BIG COMMAND to parse through all jar files toml files
+:: New totally-maintainable Copilot-GPT helped powershell command to find modID and clientOnlySide values inside mods.toml or neoforge.mods.toml files
+IF !MCMAJOR! GTR 12 FOR /F "tokens=1-4 delims=#" %%A IN ('powershell -Command "$i=1; $files = Get-ChildItem -Path .\mods -Filter *.jar; foreach ($f in $files) { try { $content = $null; foreach ($toml in @('META-INF/mods.toml', 'META-INF/neoforge.mods.toml')) { $content = (tar xOf $f.FullName $toml 2>$null); if ($content) { break } }; if (-not $content) { throw 'No toml found' }; $section = ([regex]::Matches($content, '\[mods\][\s\S]*?modId\s*=\s*([^,\r\n\t]+)', [System.Text.RegularExpressions.RegexOptions]::Singleline) | Select-Object -First 1).Groups[1].Value; $trimmed = if ($section -match '.*?"""".*?""""') { $section.Substring(0, $section.IndexOf('""""', $section.IndexOf('""""') + 1) + 1) } else { $section }; $client = if ($content -match 'clientSideOnly\s*=\s*([YN])') { $matches[1] } else { 'N' }; [string]::Concat($f.Name, '#', $(if ($trimmed) { $trimmed.Trim(' ','''','""""') } else { 'x' }), '#', $client, '#', $i++)} catch { [string]::Concat($f.Name, '#x#N#', $i++) }}"') DO (
+    SET "SERVERMODS[%%D].file=%%A"
+    SET "SERVERMODS[%%D].id=%%B"
+    SET "SERVERMODS[%%D].clientmarked=%%C"
+    ECHO SCANNING %%D/!SERVERMODSCOUNT! - %%A
+)
+
+::  OLD STYLE MCMOD.INFO
+:: BIG COMMAND to parse through all jar files toml files
+:: New totally-maintainable Copilot-GPT helped powershell command to find modid values inside mods.toml or neoforge.mods.toml files
+IF !MCMAJOR! LEQ 12 FOR /F "tokens=1-3 delims=#" %%A IN ('powershell -Command "$i=1; $files = Get-ChildItem -Path .\mods -Filter *.jar; foreach ($f in $files) { try { $content = tar xOf $f.FullName mcmod.info 2>$null; if (-not $content) { throw 'No mcmod.info' }; $json = $content | ConvertFrom-Json; $modid = if ($json.modid) { $json.modid } elseif ($json[0].modid) { $json[0].modid } else { 'x' }; [string]::Concat($f.Name, '#', $modid, '#', $i++)} catch { [string]::Concat($f.Name, '#x#', $i++) }}"') DO (
+    SET "SERVERMODS[%%C].file=%%A"
+    SET "SERVERMODS[%%C].id=%%B"
+    REM clientSideOnly will never be present in a mcmod.info
+    SET "SERVERMODS[%%C].clientmarked=N"
+    ECHO SCANNING %%C/!SERVERMODSCOUNT! - %%A
+)
 
 :: This is it! Checking each server modid versus the client only mods list text file.  Starts with a loop through each server modID found.
 SET /a NUMCLIENTS=0
-FOR /L %%b IN (0,1,!SERVERMODSCOUNT!) DO (
+FOR /L %%b IN (1,1,!SERVERMODSCOUNT!) DO (
 
   REM IF - Looks to see if the mods ID file was labeled by the author as clientSideOnly=true
   REM ELSE - run detection of client mods based on the Universalator curated client mods list.
-
   IF !SERVERMODS[%%b].clientmarked!==Y (
     SET /a NUMCLIENTS+=1
     SET "FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!"
-    SET "FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!""
+    SET "FOUNDCLIENTS[!NUMCLIENTS!].file=!SERVERMODS[%%b].file!"
   ) ELSE (
-
     REM Runs a FINDSTR to see if the string of the modID is found on a line.  This needs further checks to guarantee the modID is the entire line and not just part of it.
-    
-  
     REM If errorlevel is 0 then the FINDSTR above found the modID.  The line returned by the FINDSTR can be captured into a variable by using a FOR loop.
     REM That variable is compared to the server modID in question.  If they are equal then it is a definite match and the modID and filename are recorded to a list of client only mods found.
     FINDSTR /I /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt >nul && (
       FOR /F "delims=" %%A IN ('FINDSTR /I /R /C:"!SERVERMODS[%%b].id!" univ-utils\clientonlymods.txt') DO (
-
         IF /I !SERVERMODS[%%b].id!==%%A (
           SET /a NUMCLIENTS+=1
           SET "FOUNDCLIENTS[!NUMCLIENTS!].id=!SERVERMODS[%%b].id!"
@@ -2005,17 +1903,12 @@ IF !NUMCLIENTS!==0 GOTO :noclients
 
   :: Prints report to user - showing client mod file names and corresponding modid's.
   CLS
-  ECHO:
-  ECHO:
-  ECHO   %yellow% THE FOLLOWING CLIENT ONLY MODS WERE FOUND %blue%
-  ECHO:
+  ECHO: & ECHO: & ECHO   %yellow% THE FOLLOWING CLIENT ONLY MODS WERE FOUND %blue% & ECHO:
   IF !MCMAJOR! LEQ 12 (
   ECHO    *NOTE - IT IS DETECTED THAT YOUR MINECRAFT VERSION STORES ITS ID NUMBER IN THE OLD WAY*
   ECHO     SOME CLIENT ONLY MODS MAY NOT BE DETECTED BY THE SCAN - I.E. MODS THAT DO NOT USE A MCMOD.INFO FILE
-  )
-  ECHO:
-  ECHO    ------------------------------------------------------
-
+)
+ECHO: & ECHO    ------------------------------------------------------
 
 :: The purpose of the following code is to echo the modIDs and filenames to view but do so with auto-formatted columns depending on the maximum size of the modID.
 :: It determines this first entry column width with a funciton.
@@ -2038,50 +1931,48 @@ FOR /L %%D IN (1,1,!NUMCLIENTS!) DO (
 	ECHO   !Column!  -   !FOUNDCLIENTS[%%D].file!
 )
 
-
-  ECHO    ------------------------------------------------------ & ECHO: & ECHO:
-  ECHO   %green% *** DO YOU WANT TO MOVE THESE CLIENT MODS TO A DIFFERENT FOLDER FOR SAFE KEEPING? *** %blue%
-  ECHO:
-  ECHO         If 'Y' they will NOT be deleted - they WILL be moved to a new folder in the server named %green% CLIENTMODS %blue%
-  ECHO         SOME CLIENT MODS ARE NOT CODED TO SELF DISABLE AND WILL CRASH SERVERS IF LEFT IN THE MODS FOLDER
-  ECHO: & ECHO:
-  ECHO      - IF YOU THINK THE CURRENT MASTER LIST IS INNACURATE OR HAVE FOUND A MOD TO ADD -
-  ECHO         PLEASE CONTACT THE LAUNCHER AUTHOR OR
-  ECHO         FILE AN ISSUE AT https://github.com/nanonestor/universalator/issues !
-  ECHO:
-  :typo
-  ECHO    ------------------------------------------------------ & ECHO:
-  ECHO       %yellow% ENTER YOUR RESPONSE - 'Y' OR 'N' %blue%
-  ECHO:
-  SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
-  SET /P MOVEMODS=
-  IF /I !MOVEMODS!==N (
-    GOTO :mainmenu
+ECHO    ------------------------------------------------------ & ECHO: & ECHO:
+ECHO   %green% *** DO YOU WANT TO MOVE THESE CLIENT MODS TO A DIFFERENT FOLDER FOR SAFE KEEPING? *** %blue%
+ECHO:
+ECHO         If 'Y' they will NOT be deleted - they WILL be moved to a new folder in the server named %green% CLIENTMODS %blue%
+ECHO         SOME CLIENT MODS ARE NOT CODED TO SELF DISABLE AND WILL CRASH SERVERS IF LEFT IN THE MODS FOLDER
+ECHO: & ECHO:
+ECHO      - IF YOU THINK THE CURRENT MASTER LIST IS INNACURATE OR HAVE FOUND A MOD TO ADD -
+ECHO         PLEASE CONTACT THE LAUNCHER AUTHOR OR
+ECHO         FILE AN ISSUE AT https://github.com/nanonestor/universalator/issues !
+ECHO:
+:typo
+ECHO    ------------------------------------------------------ & ECHO:
+ECHO       %yellow% ENTER YOUR RESPONSE - 'Y' OR 'N' %blue%
+ECHO:
+SET /P SCRATCH="%blue%  %green% ENTRY: %blue% " <nul
+SET /P MOVEMODS=
+IF /I !MOVEMODS!==N (
+  GOTO :mainmenu
+)
+IF /I !MOVEMODS!==Y (
+  IF NOT EXIST "%HERE%\CLIENTMODS" (
+    MD CLIENTMODS
   )
-  IF /I !MOVEMODS!==Y (
-    IF NOT EXIST "%HERE%\CLIENTMODS" (
-      MD CLIENTMODS
-    )
-  ) ELSE GOTO :typo
-  :: Moves files if MOVEMODS is Y.  Checks to see if the value of the array is null for each spot.
-  CLS
-  ECHO:
-  ECHO:
-  FOR /L %%L IN (1,1,!NUMCLIENTS!) DO (
-    IF DEFINED FOUNDCLIENTS[%%L].file (
-      MOVE "%HERE%\mods\!FOUNDCLIENTS[%%L].file!" "%HERE%\CLIENTMODS\!FOUNDCLIENTS[%%L].file!" >nul 2>&1
-      ECHO   MOVED - !FOUNDCLIENTS[%%L].file!
-  ) ) 
+) ELSE ( GOTO :typo )
+
+:: Moves files if MOVEMODS is Y.  Checks to see if the value of the array is null for each spot.
+CLS
+ECHO: & ECHO:
+FOR /L %%L IN (1,1,!NUMCLIENTS!) DO (
+  IF DEFINED FOUNDCLIENTS[%%L].file (
+    MOVE "%HERE%\mods\!FOUNDCLIENTS[%%L].file!" "%HERE%\CLIENTMODS\!FOUNDCLIENTS[%%L].file!" >nul 2>&1
+    ECHO   MOVED - !FOUNDCLIENTS[%%L].file!
+  ) 
+) 
   
-  ECHO:
-  ECHO      %yellow%   CLIENT MODS MOVED TO THIS FOLDER AS STORAGE:     %blue%
-  ECHO      %yellow%   "%HERE%\CLIENTMODS"    %blue%
-  ECHO: & ECHO:
-  ECHO      %yellow% -PRESS ANY KEY TO CONTINUE- %blue%
-  ECHO:
-  DEL univ-utils\foundclients.txt >nul 2>&1
-  DEL univ-utils\allmodidsandfiles.txt >nul 2>&1
-  PAUSE
+ECHO: & ECHO      %yellow%   CLIENT MODS MOVED TO THIS FOLDER AS STORAGE:     %blue%
+ECHO      %yellow%   "%HERE%\CLIENTMODS"    %blue%
+ECHO: & ECHO:
+ECHO      %yellow% -PRESS ANY KEY TO CONTINUE- %blue% & ECHO:
+DEL univ-utils\foundclients.txt >nul 2>&1
+DEL univ-utils\allmodidsandfiles.txt >nul 2>&1
+PAUSE
   
 GOTO :mainmenu
 
@@ -2090,10 +1981,8 @@ CLS
 ECHO: & ECHO:
 ECHO   %yellow% ----------------------------------------- %blue%
 ECHO   %yellow%     NO CLIENT ONLY MODS FOUND             %blue%
-ECHO   %yellow% ----------------------------------------- %blue%
-ECHO:
-ECHO    PRESS ANY KEY TO CONTINUE...
-ECHO:
+ECHO   %yellow% ----------------------------------------- %blue% & ECHO:
+ECHO    PRESS ANY KEY TO CONTINUE... & ECHO:
 DEL univ-utils\foundclients.txt >nul 2>&1
 DEL univ-utils\allmodidsandfiles.txt >nul 2>&1
 PAUSE
@@ -2273,7 +2162,7 @@ SET fabricinstallerhecksum=!FOUT[1]!
 :: IF yes then install fabric server files
 IF EXIST fabric-installer.jar (
     IF /I !INSTALLERVAL!==!fabricinstallerhecksum! (
-      "%JAVAFILE%" -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !FABRICMCNAME! -downloadMinecraft
+      "!JAVAFILE!" -XX:+UseG1GC -jar fabric-installer.jar server -loader !FABRICLOADER! -mcversion !FABRICMCNAME! -downloadMinecraft
     ) ELSE (
       DEL fabric-installer.jar
       ECHO:
@@ -2376,7 +2265,7 @@ IF "%HERE%" NEQ "%HERE: =%" (
 )
 IF EXIST quilt-installer.jar (
     IF /I !INSTALLERVAL!==!quiltinstallerhecksum! (
-      "%JAVAFILE%" -XX:+UseG1GC -jar quilt-installer.jar install server !QUILTMCNAME! !QUILTLOADER! --download-server --install-dir=%cd%
+      "!JAVAFILE!" -XX:+UseG1GC -jar quilt-installer.jar install server !QUILTMCNAME! !QUILTLOADER! --download-server --install-dir=%cd%
     ) ELSE (
       DEL quilt-installer.jar
       ECHO:
@@ -2409,117 +2298,22 @@ GOTO :preparequilt
 
 ECHO:
 
-IF EXIST univ-utils\allfabricdeps.txt DEL univ-utils\allfabricdeps.txt >nul
-
 :: This variable is for a trigger to determine at the end if any client mods at all were found.
 SET FOUNDFABRICCLIENTS=N
+ 
+:: BIG COMMAND which uses powershell to: search inside all .jar files in mods folder, get information from any found fabric.mod.json for mod id, environment, and depends
+:: Creates a pseudo array of the values keyed to the number of the each file found in sequence.
+IF !MODLOADER!==FABRIC FOR /F "tokens=1-5 delims=;" %%A IN ('powershell -Command "$i=0; $files = Get-ChildItem -Path .\mods -Filter *.jar; foreach ($f in $files) { try { $content = (tar xOf $f.FullName '*fabric.mod.json' 2>$null); if (-not $content) { throw 'No fabric.mod.json' }; $json = ($content | Out-String | ConvertFrom-Json); if (-not $json) { throw 'Invalid JSON' }; $id = if ($json.id) { $json.id } else { 'x' }; $env = if ($json.environment) { $json.environment } else { 'x' }; $deps = if ($json.depends) { ($json.depends | Get-Member -MemberType NoteProperty).Name -join '#' } else { 'x' }; [string]::Concat($f.Name, ';', $id, ';', $env, ';', $deps, ';', $i++)} catch { [string]::Concat($f.Name, ';x;x;x;', $i++) }}"') DO ( SET SERVERMODS[%%E].file=%%A & SET SERVERMODS[%%E].id=%%B & SET SERVERMODS[%%E].environ=%%C & SET SERVERMODS[%%E].deps=%%D )
 
-:: Loops through each number up to the total mods count to enter that filename into the next loop.
+:: For Quilt modloader - fabric.mod.json changed to quilt.mod.json with fabric.mod.json as a backup.
+IF !MODLOADER!==QUILT FOR /F "tokens=1-5 delims=;" %%A IN ('powershell -Command "$i=0; $files = Get-ChildItem -Path .\mods -Filter *.jar; foreach ($f in $files) { try { $content = (tar xOf $f.FullName '*quilt.mod.json' 2>$null); if (-not $content) { $content = (tar xOf $f.FullName '*fabric.mod.json' 2>$null) }; if (-not $content) { throw 'No mod json found' }; $json = ($content | Out-String | ConvertFrom-Json); if (-not $json) { throw 'Invalid JSON' }; $id = if ($json.id) { $json.id } else { 'x' }; $env = if ($json.environment) { $json.environment } else { 'x' }; $deps = if ($json.depends) { ($json.depends | Get-Member -MemberType NoteProperty).Name -join '#' } else { 'x' }; [string]::Concat($f.Name, ';', $id, ';', $env, ';', $deps, ';', $i++)} catch { [string]::Concat($f.Name, ';x;x;x;', $i++) }}"') DO ( SET SERVERMODS[%%E].file=%%A & SET SERVERMODS[%%E].id=%%B & SET SERVERMODS[%%E].environ=%%C & SET SERVERMODS[%%E].deps=%%D )
+
+:: Loops through each number up to the total mods count, sanitizes the saved variable contents by removing spaces, triggers FOUNDFABRICCLIENTS if any mod has client environ
 FOR /L %%f IN (0,1,!SERVERMODSCOUNT!) DO (
-  SET /a JSONLINE=0
-  SET FOUNDDEPENDS=N
-  SET SERVERMODS[%%f].environ=N
-  SET /a COUNT=%%f
-  SET /a COUNT+=1
-  :: Starts a variable to keep things appended to the .deps variable surrounded in semicolons.
-  SET "SERVERMODS[%%f].deps=;"
-  SET FOUNDID=N
-
-  ECHO SCANNING !COUNT!/%ACTUALMODSCOUNT% - !SERVERMODS[%%f].file!
-
-  tar -xOf "mods\!SERVERMODS[%%f].file!" fabric.mod.json >nul 2>&1
-
-  REM Uses STDOUT from tar command to loop through each line in the fabric.mod.json file of each mod file.
-  IF !ERRORLEVEL!==0 FOR /F "delims=" %%I IN ('tar -xOf "mods\!SERVERMODS[%%f].file!" fabric.mod.json') DO (
-
-    REM Sets a temp variable equal to the current line for processing, and replaces " with ; for easier loop delimiting later.
-    SET "TEMP=%%I"
-    SET "TEMP=!TEMP:"=;!"
-
-    REM MODID DETECTION
-    REM If the line contains the modid then further process line and then set ID equal to the actual modid entry.
-    REM AND takes care of all JSONs which are formatted on one line only.
-    IF "!TEMP!" NEQ "!TEMP:;id;=x!" (
-      IF !JSONLINE! NEQ 0 IF !FOUNDID!==N (
-        :: MULTI LINE ID
-        SET "TEMP=!TEMP:%TABCHAR%=!"
-        SET "TEMP=!TEMP: =!"
-        SET "TEMP=!TEMP::=!"
-        :: Removes unicode greater than and less than codes, for some reason fabric authors have started doing this?
-        SET "TEMP=!TEMP:\u003d=!"
-        SET "TEMP=!TEMP:\u003e=!"
-        REM Normal id delims detection
-        FOR /F "tokens=1-3 delims=;" %%Q IN ("!TEMP!") DO (
-          SET "SERVERMODS[%%f].id=%%R"
-          REM Sets FOUNDID to prevent triggering later if another line contains ;id;
-          SET FOUNDID=Y
-        )
-      ) ELSE (
-      :: This ELSE will be all times when the line number is 0 and modID is found, meaning a 1-line fabric.mod.json - Do all 1-line JSON processing here
-        REM Detection for cases when JSON files are formatted to all be on one line instead of multiple lines.
-        REM This method is REALLY slow.  Only to be used here if the CMD way if it's detected that the JSON is formatted onto one line.
-
-        REM SINGLE LINE ID
-        REM Sets single quotes in file names to have a powershell escape character in front.
-        SET "THISFILENAME=mods\!SERVERMODS[%%f].file!"
-        SET "THISFILENAME=!THISFILENAME:'=`'!"
-        FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.id"') DO ( SET "SERVERMODS[%%f].id=%%A" )
-
-        REM SINGLE LINE DEPENDENCIES
-        REM Makes a list of dependencies excluding a few to be ignored.  Semicolons used as a spacer in the holder variable.  If someone uses a semicolon in their dependency name, I swear to god...
-        FOR /F %%D IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.depends.psobject.properties.name"') DO (
-          IF %%D NEQ fabricloader IF %%D NEQ minecraft IF %%D NEQ fabric IF %%D NEQ java IF %%D NEQ cloth-config IF %%D NEQ cloth-config2 IF %%D NEQ fabric-language-kotlin IF %%D NEQ iceberg IF %%D NEQ fabric-resource-loader-v0 IF %%D NEQ creativecore IF %%D NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%D;"
-        )
-
-        REM SINGLE LINE ENVIRONMENT
-        FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" fabric.mod.json) | Out-String | ConvertFrom-Json; $json.environment"') DO (
-          IF /I "%%A"=="client" ( SET "SERVERMODS[%%f].environ=C" ) ELSE ( SET "SERVERMODS[%%f].environ=N" )
-        )
-      )
-    )
-    :: MULT LINE ENVIRONMENT
-    REM Detects with the string replacement method if the enviroment value is present, and then if found whether the client entry is present.  Otherwise if environment is found but client not - mark mod as not client.
-    IF !JSONLINE! NEQ 0 IF "!TEMP!" NEQ "!TEMP:;environment;=x!" (
-      IF "!TEMP!" NEQ "!TEMP:client=x!" IF "!SERVERMODS[%%f].id!" NEQ "modmenu" (
-        SET SERVERMODS[%%f].environ=C
-        SET FOUNDFABRICCLIENTS=Y
-      ) ELSE ( SET SERVERMODS[%%f].environ=N )
-    )
-
-    :: MULTI LINE DEPENDENCIES
-    REM If the depends value was found in a previous loop but the }, string is found - set the FOUDNDEPENDS variable back equal to N to stop recording entries.
-    IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==Y IF "!TEMP!" NEQ "!TEMP:},=x!" SET FOUNDDEPENDS=N
-    REM If the depends value was found in a previous loop and no JSON value ending strings are found - record the dependency entry (ignores common entries that aren't relevant)
-     IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==Y IF "!TEMP!"=="!TEMP:}=x!" IF "!TEMP!"=="!TEMP:]=x!" (
-      SET "TEMP=!TEMP:%TABCHAR%=!"
-      SET "TEMP=!TEMP: =!"
-      SET "TEMP=!TEMP::=!"
-       IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==Y FOR /F "delims=;" %%g IN ("!TEMP!") DO (
-        IF %%g NEQ fabricloader IF %%g NEQ minecraft IF %%g NEQ fabric IF %%g NEQ java IF %%g NEQ cloth-config IF %%g NEQ cloth-config2 IF %%g NEQ fabric-language-kotlin IF %%g NEQ iceberg IF %%g NEQ fabric-resource-loader-v0 IF %%g NEQ creativecore IF %%g NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%g;"
-       )
-    )
-    REM If the depends string is found set FOUNDDEPENDS Y for discovery in the next loop iteration.
-    IF !JSONLINE! NEQ 0 IF !FOUNDDEPENDS!==N IF "!TEMP!" NEQ "!TEMP:;depends;=x!" SET FOUNDDEPENDS=Y
-    REM Increases the integer value of JSONLINE - this variable is only used to determine if the JSON is the compact 1 line version or has multiple lines.
-    SET /a JSONLINE+=1
-  ) ELSE (
-
-    REM IN CASE OF BEING A QUILT MOD - REPEAT THE POWERSHELL METHOD TO KEEP IT SIMPLE (BUT IS SLOW).
-    tar -xOf "mods\!SERVERMODS[%%f].file!" quilt.mod.json >nul 2>&1
-    IF !ERRORLEVEL!==0 (
-      REM Sets single quotes in file names to have a powershell escape character in front.
-      SET "THISFILENAME=mods\!SERVERMODS[%%f].file!"
-      SET "THISFILENAME=!THISFILENAME:'=`'!"
-
-      FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.id"') DO SET "SERVERMODS[%%f].id=%%A"
-      FOR /F %%A IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.minecraft.environment"') DO (
-        IF "%%A"=="client" IF "!SERVERMODS[%%f].id!" NEQ "modmenu" ( SET "SERVERMODS[%%f].environ=C" ) ELSE ( SET "SERVERMODS[%%f].environ=N" )
-      )
-      FOR /F %%B IN ('powershell -Command "$json=(tar xOf "!THISFILENAME!" quilt.mod.json) | Out-String | ConvertFrom-Json; $json.quilt_loader.depends.id"') DO (
-        IF %%B NEQ quilt_loader IF %%B NEQ minecraft IF %%B NEQ quilt_base IF %%B NEQ java IF %%B NEQ cloth-config IF %%B NEQ cloth-config2 IF %%B NEQ fabric-language-kotlin IF %%B NEQ iceberg IF %%B NEQ quilted_fabric_api IF %%B NEQ creativecore IF %%B NEQ architectury SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps!%%B;"
-      )
-    )
-  )
+  SET "SERVERMODS[%%f].id=!SERVERMODS[%%f].id: =!"
+  SET "SERVERMODS[%%f].environ=!SERVERMODS[%%f].environ: =!"
+  SET "SERVERMODS[%%f].deps=!SERVERMODS[%%f].deps: =!"
+  IF /I !SERVERMODS[%%f].environ!==client SET FOUNDFABRICCLIENTS=Y
 )
 
 REM Goes to the no clients found message.  If any environment client mods were found this trigger variable will be Y instead.
@@ -2531,16 +2325,16 @@ ECHO: & ECHO   Cross-checking found client-side mods with all required dependenc
 :: Using a FINDSTR on the txt file vs looping through all variables is at least 2 orders of magnitude faster.  And combining together all .deps variables could be greater than the max variable character limit...
 ECHO fabricdeps>fabricdeps.txt
 FOR /L %%A IN (0,1,!SERVERMODSCOUNT!) DO (
-  IF "!SERVERMODS[%%A].deps!" NEQ ";" ECHO !SERVERMODS[%%A].deps!>>fabricdeps.txt
+  IF "!SERVERMODS[%%A].deps!" NEQ "x" ECHO #!SERVERMODS[%%A].deps!#>>fabricdeps.txt
 )
 
 :: Loops through each modID and checks to see if its needed by another mod in the fabricdeps.txt.  Searching the modID surrounded in semicolons guarantees it only matches that exact ID.
 SET /a CLIENTSCOUNT=0
 FOR /L %%r IN (0,1,!SERVERMODSCOUNT!) DO (
   REM If the mod is tagged as client enrironment
-  IF !SERVERMODS[%%r].environ!==C (
+  IF /I "!SERVERMODS[%%r].environ!"=="client" (
 
-    FINDSTR ";!SERVERMODS[%%r].id!;" "fabricdeps.txt" >nul 2>&1 || SET INCLUDE=Y
+    FINDSTR "#!SERVERMODS[%%r].id!#" "fabricdeps.txt" >nul 2>&1 || SET INCLUDE=Y
 
     REM If set to include, add the mod to the list of mods that can be safely removed with no other mod requiring it as dependency.
     IF !INCLUDE!==Y (
@@ -2612,26 +2406,19 @@ FOR /L %%D IN (0,1,!CLIENTSCOUNT!) DO (
       ECHO   MOVED - !FABRICCLIENTS[%%L].file!
     )
   )
-  ECHO:
-  ECHO      %yellow%   CLIENT MODS MOVED TO THIS FOLDER AS STORAGE:     %blue%
-  ECHO      %yellow%   "%HERE%\CLIENTMODS" %blue%
-  ECHO:
-  ECHO:
-  ECHO      %yellow% -PRESS ANY KEY TO CONTINUE- %blue%
-  ECHO:
+  ECHO: & ECHO      %yellow%   CLIENT MODS MOVED TO THIS FOLDER AS STORAGE:     %blue%
+  ECHO      %yellow%   "%HERE%\CLIENTMODS" %blue% & ECHO:
+  ECHO: & ECHO      %yellow% -PRESS ANY KEY TO CONTINUE- %blue% & ECHO:
   PAUSE
   GOTO :mainmenu
 
 :noclientsfabric
 CLS
-ECHO:
-ECHO:
+ECHO: & ECHO:
 ECHO   %yellow% ----------------------------------------- %blue%
 ECHO   %yellow%     NO CLIENT ONLY MODS FOUND             %blue%
 ECHO   %yellow% ----------------------------------------- %blue%
-ECHO:
-ECHO    PRESS ANY KEY TO CONTINUE...
-ECHO:
+ECHO: & ECHO    PRESS ANY KEY TO CONTINUE... & ECHO:
 PAUSE
 GOTO :mainmenu
 
@@ -3270,7 +3057,7 @@ GOTO :mainmenu
 :mcreator
 CLS
 ECHO:
-ECHO %yellow% Searching 'mods' folder for MCreator mods [Please Wait] %blue%
+ECHO   %yellow% Searching 'mods' folder for MCreator mods [Please Wait] %blue%
 ECHO:
 PUSHD mods
 findstr /i /m "net/mcreator /procedures/" *.jar >final.txt
