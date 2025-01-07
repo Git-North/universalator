@@ -1,3 +1,4 @@
+
 @ECHO OFF
 :: if you are gonna do any automation/scripting do it between here
 :scriptingStart
@@ -949,7 +950,7 @@ IF /I !OVERRIDE!==J (
 :: Looks inside the 'release' file for later information display.  If all found folders are old, or there are no found folders, script continues on.
 ECHO: & ECHO   Checking for system installed Java !JAVAVERSION! less than !MONTHS_OLD! months old... .. .
 
-FOR /F "delims=" %%A IN ('powershell -Command "$ver='!JAVAVERSION!'; $MonthsAgo = (Get-Date).AddMonths(-!MONTHS_OLD!); $paths = @('C:\Program Files', 'C:\Program Files\Java', 'C:\Program Files\Eclipse Adoptium', 'C:\Program Files\Eclipse Foundation', 'C:\Program Files\Amazon Corretto', 'C:\Program Files\Zulu'); foreach ($p in $paths) { if (Test-Path $p) { Get-ChildItem $p -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(jdk-?'+$ver+'|temurin-?'+$ver+'|jre-?'+$ver+'([\.0-9]+[-]?)*|zulu-?'+$ver+'|jdk1\.'+$ver+'|java-?'+$ver+'|openjdk-?'+$ver+')([-_].*)*$' } | ForEach-Object { $ageTag = if ($MonthsAgo -gt $_.CreationTime) { 'old#' } else { 'new#' }; $ageTag + $_.FullName } } }"') DO (
+FOR /F "delims=" %%A IN ('powershell -Command "$ver='!JAVAVERSION!'; $MonthsAgo = (Get-Date).AddMonths(-!MONTHS_OLD!); $paths = @('C:\Program Files', 'C:\Program Files\Java', 'C:\Program Files\Amazon Corretto', 'C:\Program Files\Zulu' 'C:\Program Files\Eclipse Adoptium', 'C:\Program Files\Eclipse Foundation'); foreach ($p in $paths) { if (Test-Path $p) { Get-ChildItem $p -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(jdk-?'+$ver+'|temurin-?'+$ver+'|jre-?'+$ver+'([\.0-9]+[-]?)*|zulu-?'+$ver+'|jdk1\.'+$ver+'|java-?'+$ver+'|openjdk-?'+$ver+')([-_].*)*$' } | ForEach-Object { $ageTag = if ($MonthsAgo -gt $_.CreationTime) { 'old#' } else { 'new#' }; $ageTag + $_.FullName } } }"') DO (
 
   FOR /F "tokens=1-2 delims=#" %%B IN ("%%A") DO (
     IF /I "%%B"=="new" IF EXIST "%%C\bin\java.exe" (
