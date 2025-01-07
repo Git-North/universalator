@@ -1,4 +1,4 @@
-
+bu
 @ECHO OFF
 :: if you are gonna do any automation/scripting do it between here
 :scriptingStart
@@ -3338,7 +3338,7 @@ IF NOT EXIST server.properties (
     ECHO max-build-height=256>>server.properties
     ECHO spawn-npcs=true>>server.properties
     ECHO spawn-animals=true>>server.properties
-    ECHO difficulty=normal>>server.properties
+    ECHO difficulty=hard>>server.properties
 
     SET SERVERPROPSPORT=25565
     GOTO :skipserverproperties
