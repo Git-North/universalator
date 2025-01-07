@@ -3347,8 +3347,6 @@ IF NOT EXIST server.properties (
 :: If server.properties exists then check it's values and record or deal with them as needed.
 IF EXIST server.properties FOR /F "tokens=1,2 delims==" %%A IN ('type server.properties') DO (
   IF "%%A"=="server-port" SET SERVERPROPSPORT=%%B
-  IF "%%A"=="allow-flight" IF "%%B"=="false" ( CALL :serverpropsedit allow-flight true ) 
-  IF "%%A"=="online-mode" IF "%%B"=="false" ( CALL :serverpropsedit online-mode true )
   IF "%%A"=="server-ip" SET "IPLINE=%%A=%%B"
 )
 
