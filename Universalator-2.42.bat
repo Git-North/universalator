@@ -975,8 +975,6 @@ ver >nul
 ECHO: & ECHO:
 
 FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
-  ECHO "%%A" | FINDSTR "!FINDFOLDER!" >nul
-
     SET "JAVAFOLDER=%%A"
     ECHO   Found existing Java !JAVAVERSION! folder - %%A & ECHO:
     ping -n 1 127.0.0.1 >nul
@@ -994,9 +992,8 @@ FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
         SET FOUNDJAVA=OLD
 
         GOTO :javaold
-      )
     )
-  
+  )
 )
 :: If script has not skipped ahead by now then a Java folder was not found for the major Java version searched for.
 ECHO   Universalator Java folder not found - Getting Java - !JAVAVERSION! - from Adoptium. & ECHO:
