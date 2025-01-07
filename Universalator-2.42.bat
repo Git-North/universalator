@@ -976,12 +976,12 @@ ECHO: & ECHO:
 
 FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
   ECHO "%%A" | FINDSTR "!FINDFOLDER!" >nul
-  IF !ERRORLEVEL!==0 (
+
     SET "JAVAFOLDER=%%A"
     ECHO   Found existing Java !JAVAVERSION! folder - %%A & ECHO:
     ping -n 1 127.0.0.1 >nul
     :: Runs a FOR loop with a powershell command to check the age of the found java folder.  If it's older than 3 months result is 'True'.  If it's newer than 3 months result is 'False'.
-    FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\java\%%A' -OlderThan (Get-Date).AddMonths(-2.5)"') DO (
+    FOR /F %%G IN ('powershell -Command "Test-Path '%HEREPOWERSHELL%\univ-utils\java\' -OlderThan (Get-Date).AddMonths(-2.5)"') DO (
       :: If False then that means the folder is newer than 3 months - go ahead and use that folder for java, then move on!
       IF %%G==False (
         SET "JAVAFILE=%HERE%\univ-utils\java\%%A\bin\java.exe"
@@ -996,7 +996,7 @@ FOR /F "delims=" %%A IN ('DIR /B univ-utils\java') DO (
         GOTO :javaold
       )
     )
-  )
+  
 )
 :: If script has not skipped ahead by now then a Java folder was not found for the major Java version searched for.
 ECHO   Universalator Java folder not found - Getting Java - !JAVAVERSION! - from Adoptium. & ECHO:
