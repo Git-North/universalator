@@ -1,4 +1,4 @@
-bu
+
 @ECHO OFF
 :: if you are gonna do any automation/scripting do it between here
 :scriptingStart
