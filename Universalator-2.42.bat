@@ -2546,7 +2546,7 @@ for /f %%A in ('powershell -Command "(Invoke-WebRequest -Uri 'https://mvnreposit
 echo Latest json.jar version: %LATEST_VERSION%
 curl https://repo1.maven.org/maven2/org/json/json/%LATEST_VERSION%/json-%LATEST_VERSION%.jar -o json.jar
 echo Download complete.
-"!JAVAFILE!" -cp .;json.jar Main
+"!JAVAFILE!" -cp .;json.jar Mrpack-Util
 exit /b
 
 
