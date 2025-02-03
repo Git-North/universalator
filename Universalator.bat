@@ -193,6 +193,7 @@ IF /I !MAINMENU!==LOG ( CALL :logs_view ) ELSE IF /I !MAINMENU!==LOGS ( CALL :lo
 IF /I !MAINMENU!==MODS ( CALL :mods_view )
 IF /I !MAINMENU!==SMOD ( CALL :mods_view )
 IF /I !MAINMENU!==PURGE ( CALL :purge_function )
+IF /I !MAINMENU!==MRP ( CALL :mrpack )
 
 :: If no recognized entries were made then go back to main menu
 GOTO :mainmenu
@@ -222,6 +223,7 @@ ECHO:    %green% LOG %blue%      = VIEW THE LAST LOG FILE MADE
 ECHO:    %green% MODS/SMOD%blue% = VIEW ALL FILES ^& FOLDERS IN MODS FOLDER
 ECHO:    %green% MCREATOR %blue% = SCAN MOD FILES FOR MCREATOR MADE MODS
 ECHO:    %green% OVERRIDE %blue% = TOGGLE THE JAVA OVERRIDE STATUS
+ECHO:    %green% MRP %blue%      = EXTRACT AN .MRPACK FILE
 ECHO:    %green% ZIP %blue%      = MENU FOR CREATING SERVER PACK ZIP FILE & ECHO: & ECHO: & ECHO:
 :: Instead of yet another entry prompt, goes back to utilize the same main menu prompt and logic.  All-commands menu is really just an alternate main menu display.
 GOTO :allcommandsentry
@@ -2545,6 +2547,23 @@ ECHO      the mod file names for future reference. & ECHO:
 PAUSE
 EXIT /B
 :: END MCREATOR SECTION
+
+::MRPACK EXTRACT
+:mrpack
+:: get the class filecall
+call :java_checks
+cd %~dp0\univ-utils
+Echo Getting mrpack utility .class file
+for /f "delims=" %%A in ('powershell -Command "$url = (Invoke-WebRequest -UseBasicParsing 'https://api.github.com/repos/Git-North/mrpack-installer/releases/latest' | ConvertFrom-Json).assets | Where-Object { $_.browser_download_url -match '.*' } | Select-Object -ExpandProperty browser_download_url; Write-Output $url"') do set "DOWNLOAD_URL=%%A"
+curl -L -k "%DOWNLOAD_URL%" -O
+setlocal
+:: Get json.jar
+for /f %%A in ('powershell -Command "(Invoke-WebRequest -Uri 'https://mvnrepository.com/artifact/org.json/json' -UseBasicParsing).Content -match 'Latest Version:\s*<a[^>]*>(.*?)</a>';$matches[1]"') do set "LATEST_VERSION=%%A"
+echo Latest json.jar version: %LATEST_VERSION%
+curl https://repo1.maven.org/maven2/org/json/json/%LATEST_VERSION%/json-%LATEST_VERSION%.jar -o json.jar
+echo Download complete.
+"!JAVAFILE!" -cp .;json.jar mrpack-util
+exit /b
 
 
 :: FUNCTION TO - MAKE ZIP SERVERPACK SECTION
