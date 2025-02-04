@@ -10,3 +10,4 @@ It also has some misc improvements like:
 - Removal of `allow-flight: true` enforcement
 - Support for command-line arguments (Better Automation)
 - Server Launches in 25 seconds after going to the "Launch Server" screen (Better Automation)
+- mrpack extraction support
